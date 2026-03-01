@@ -65,7 +65,9 @@ export const outputApi = {
   addTag: (id, data) => request.post(`/outputs/${id}/tags`, data),
   removeTag: (id, tagId) => request.delete(`/outputs/${id}/tags/${tagId}`),
   toggleFavorite: (id) => request.post(`/outputs/${id}/favorite`),
-  export: (id, format) => request.get(`/outputs/${id}/export`, { params: { format }, responseType: 'blob' }),
+  export: (id, format) => request.get(`/outputs/${id}/export`, { params: { format } }),
+  batchDelete: (ids) => request.post('/outputs/batch-delete', { ids }),
+  batchExport: (ids) => request.post('/outputs/batch-export', { ids }),
 }
 
 // ==================== 协作配置 ====================
@@ -75,9 +77,25 @@ export const collaborationApi = {
   create: (data) => request.post('/collaborations', data),
   update: (id, data) => request.put(`/collaborations/${id}`, data),
   delete: (id) => request.delete(`/collaborations/${id}`),
+  // 流程控制
+  start: (id) => request.post(`/collaborations/${id}/start`),
+  stop: (id) => request.post(`/collaborations/${id}/stop`),
   // 模板
   listTemplates: (params) => request.get('/collaborations/templates', { params }),
   saveAsTemplate: (id) => request.post(`/collaborations/${id}/save-template`),
+  // 流程编辑器
+  getFlow: (id) => request.get(`/collaborations/${id}/flow`),
+  saveLayout: (id, data) => request.put(`/collaborations/${id}/layout`, data),
+  // 节点
+  listNodes: (id) => request.get(`/collaborations/${id}/nodes`),
+  createNode: (id, data) => request.post(`/collaborations/${id}/nodes`, data),
+  updateNode: (collabId, nodeId, data) => request.put(`/collaborations/${collabId}/nodes/${nodeId}`, data),
+  deleteNode: (collabId, nodeId) => request.delete(`/collaborations/${collabId}/nodes/${nodeId}`),
+  // 连线
+  listEdges: (id) => request.get(`/collaborations/${id}/edges`),
+  createEdge: (id, data) => request.post(`/collaborations/${id}/edges`, data),
+  updateEdge: (collabId, edgeId, data) => request.put(`/collaborations/${collabId}/edges/${edgeId}`, data),
+  deleteEdge: (collabId, edgeId) => request.delete(`/collaborations/${collabId}/edges/${edgeId}`),
 }
 
 // ==================== 共享记忆池 ====================

@@ -6,7 +6,7 @@ from app.models.model_config import ModelProvider, ModelConfig
 from app.models.agent import Agent, AgentSkill, SharedMemoryPool, AgentMemoryPoolBinding
 from app.models.skill import Skill
 from app.models.output import Output, OutputTag, OutputAttachment
-from app.models.collaboration import Collaboration
+from app.models.collaboration import Collaboration, CollaborationNode, CollaborationEdge
 from app.models.user import User, AuditLog, SystemSetting
 
 __all__ = [
@@ -15,6 +15,6 @@ __all__ = [
     "Agent", "AgentSkill", "SharedMemoryPool", "AgentMemoryPoolBinding",
     "Skill",
     "Output", "OutputTag", "OutputAttachment",
-    "Collaboration",
+    "Collaboration", "CollaborationNode", "CollaborationEdge",
     "User", "AuditLog", "SystemSetting",
 ]

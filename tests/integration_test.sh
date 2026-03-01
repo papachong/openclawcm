@@ -157,6 +157,24 @@ check "Add tag" '"code":200' "$R"
 R=$(curl -s "$BASE/outputs/search?q=Hello")
 check "FTS search" '"total":' "$R"
 
+# Output Batch Operations
+echo ""
+echo "--- Output Batch Operations ---"
+# Create a second output for batch testing
+R=$(curl -s -X POST "$BASE/outputs" -H "Content-Type: application/json" -d "{\"instance_id\":$INSTANCE_ID,\"agent_id\":$AGENT_ID,\"output_type\":\"DOCUMENT\",\"title\":\"Batch Test Doc\",\"content\":\"# Markdown content\",\"content_type\":\"markdown\",\"status\":\"success\"}")
+check "Create second output" '"code":200' "$R"
+OUTPUT_ID2=$(echo "$R" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['id'])")
+
+R=$(curl -s -X POST "$BASE/outputs/batch-export" -H "Content-Type: application/json" -d "{\"ids\":[$OUTPUT_ID,$OUTPUT_ID2]}")
+check "Batch export" '"code":200' "$R"
+check "Batch export count" '"title":"Hello World"' "$R"
+
+R=$(curl -s -X POST "$BASE/outputs/batch-delete" -H "Content-Type: application/json" -d "{\"ids\":[$OUTPUT_ID2]}")
+check "Batch delete" '"deleted":1' "$R"
+
+R=$(curl -s -X POST "$BASE/outputs/batch-delete" -H "Content-Type: application/json" -d '{"ids":[]}')
+check "Batch delete empty rejected" '"code":400' "$R"
+
 # Collaborations
 echo ""
 echo "--- Collaboration Management ---"
@@ -166,6 +184,101 @@ COLLAB_ID=$(echo "$R" | python3 -c "import sys,json;print(json.load(sys.stdin)['
 
 R=$(curl -s "$BASE/collaborations")
 check "List collaborations" '"total":' "$R"
+
+# Collaboration Nodes CRUD
+echo ""
+echo "--- Collaboration Nodes CRUD ---"
+R=$(curl -s -X POST "$BASE/collaborations/$COLLAB_ID/nodes" -H "Content-Type: application/json" -d '{"node_type":"start","label":"开始","position_x":100,"position_y":50}')
+check "Create start node" '"node_type":"start"' "$R"
+START_NODE_ID=$(echo "$R" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['id'])")
+
+R=$(curl -s -X POST "$BASE/collaborations/$COLLAB_ID/nodes" -H "Content-Type: application/json" -d "{\"node_type\":\"agent\",\"label\":\"Coder Agent\",\"agent_id\":$AGENT_ID,\"position_x\":100,\"position_y\":200}")
+check "Create agent node" '"node_type":"agent"' "$R"
+AGENT_NODE_ID=$(echo "$R" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['id'])")
+
+R=$(curl -s -X POST "$BASE/collaborations/$COLLAB_ID/nodes" -H "Content-Type: application/json" -d '{"node_type":"end","label":"结束","position_x":100,"position_y":350}')
+check "Create end node" '"node_type":"end"' "$R"
+END_NODE_ID=$(echo "$R" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['id'])")
+
+R=$(curl -s "$BASE/collaborations/$COLLAB_ID/nodes")
+check "List nodes" '"node_type":"start"' "$R"
+
+R=$(curl -s -X PUT "$BASE/collaborations/$COLLAB_ID/nodes/$AGENT_NODE_ID" -H "Content-Type: application/json" -d '{"label":"Updated Coder"}')
+check "Update node" '"label":"Updated Coder"' "$R"
+
+# Collaboration Edges CRUD
+echo ""
+echo "--- Collaboration Edges CRUD ---"
+R=$(curl -s -X POST "$BASE/collaborations/$COLLAB_ID/edges" -H "Content-Type: application/json" -d "{\"source_node_id\":$START_NODE_ID,\"target_node_id\":$AGENT_NODE_ID}")
+check "Create edge start->agent" '"source_node_id":' "$R"
+EDGE1_ID=$(echo "$R" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['id'])")
+
+R=$(curl -s -X POST "$BASE/collaborations/$COLLAB_ID/edges" -H "Content-Type: application/json" -d "{\"source_node_id\":$AGENT_NODE_ID,\"target_node_id\":$END_NODE_ID,\"label\":\"complete\",\"edge_type\":\"success\"}")
+check "Create edge agent->end" '"edge_type":"success"' "$R"
+EDGE2_ID=$(echo "$R" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['id'])")
+
+R=$(curl -s "$BASE/collaborations/$COLLAB_ID/edges")
+check "List edges" '"source_node_id":' "$R"
+
+R=$(curl -s -X PUT "$BASE/collaborations/$COLLAB_ID/edges/$EDGE1_ID" -H "Content-Type: application/json" -d '{"label":"go"}')
+check "Update edge" '"label":"go"' "$R"
+
+# Edge validation: non-existent node
+R=$(curl -s -X POST "$BASE/collaborations/$COLLAB_ID/edges" -H "Content-Type: application/json" -d '{"source_node_id":99999,"target_node_id":99998}')
+check "Edge with bad node rejected" '"code":400' "$R"
+
+# Collaboration Flow Detail
+echo ""
+echo "--- Collaboration Flow Detail ---"
+R=$(curl -s "$BASE/collaborations/$COLLAB_ID/flow")
+check "Get flow detail" '"nodes":' "$R"
+check "Flow has edges" '"edges":' "$R"
+check "Flow has 3 nodes" '"node_type":"agent"' "$R"
+
+# Collaboration Layout Save
+echo ""
+echo "--- Collaboration Layout Save ---"
+R=$(curl -s -X PUT "$BASE/collaborations/$COLLAB_ID/layout" -H "Content-Type: application/json" -d "{\"nodes\":[{\"id\":$START_NODE_ID,\"position_x\":150,\"position_y\":80},{\"id\":$AGENT_NODE_ID,\"position_x\":150,\"position_y\":250}],\"viewport_zoom\":1.5,\"viewport_x\":10,\"viewport_y\":20}")
+check "Save layout" '"code":200' "$R"
+
+# Verify layout was saved
+R=$(curl -s "$BASE/collaborations/$COLLAB_ID")
+check "Viewport zoom saved" '"viewport_zoom":1.5' "$R"
+
+# Collaboration Start/Stop
+echo ""
+echo "--- Collaboration Flow Control ---"
+R=$(curl -s -X POST "$BASE/collaborations/$COLLAB_ID/start")
+check "Start collaboration" '"status":"running"' "$R"
+
+R=$(curl -s -X POST "$BASE/collaborations/$COLLAB_ID/start")
+check "Start already running rejected" '"code":400' "$R"
+
+R=$(curl -s -X POST "$BASE/collaborations/$COLLAB_ID/stop")
+check "Stop collaboration" '"status":"inactive"' "$R"
+
+# Start without agent node - create a new empty collab
+R=$(curl -s -X POST "$BASE/collaborations" -H "Content-Type: application/json" -d '{"name":"empty-collab","type":"chain"}')
+EMPTY_COLLAB_ID=$(echo "$R" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['id'])")
+R=$(curl -s -X POST "$BASE/collaborations/$EMPTY_COLLAB_ID/start")
+check "Start without agent nodes rejected" '"code":400' "$R"
+
+# Delete edge and node
+R=$(curl -s -X DELETE "$BASE/collaborations/$COLLAB_ID/edges/$EDGE2_ID")
+check "Delete edge" '"code":200' "$R"
+
+# Delete node (should also clean connected edges)
+R=$(curl -s -X POST "$BASE/collaborations/$COLLAB_ID/nodes" -H "Content-Type: application/json" -d '{"node_type":"condition","position_x":300,"position_y":200}')
+TEMP_NODE_ID=$(echo "$R" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['id'])")
+R=$(curl -s -X DELETE "$BASE/collaborations/$COLLAB_ID/nodes/$TEMP_NODE_ID")
+check "Delete node" '"code":200' "$R"
+
+# Save as template
+R=$(curl -s -X POST "$BASE/collaborations/$COLLAB_ID/save-template")
+check "Save as template" '"is_template":1' "$R"
+
+R=$(curl -s "$BASE/collaborations/templates")
+check "List templates" '"code":200' "$R"
 
 # Shared Memory Pools
 echo ""

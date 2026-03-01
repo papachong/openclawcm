@@ -1,11 +1,12 @@
 """
-Output management API endpoints - full CRUD + search + tags + export.
+Output management API endpoints - full CRUD + search + tags + export + batch ops.
 """
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, text
 from sqlalchemy.orm import selectinload
-from typing import Optional
+from typing import Optional, List
+from pydantic import BaseModel
 
 from app.database import get_db
 from app.models.output import Output, OutputTag
@@ -15,6 +16,10 @@ from app.schemas.output import OutputCreate, OutputOut, TagCreate
 from app.utils.response import success, error, page_response
 
 router = APIRouter()
+
+
+class BatchIds(BaseModel):
+    ids: List[int]
 
 
 def _output_to_dict(item) -> dict:
@@ -233,3 +238,42 @@ async def export_output(output_id: int, format: str = "json", db: AsyncSession =
         return success({"content": md, "filename": f"{output.title}.md"})
     else:
         return error("不支持的导出格式")
+
+
+# ==================== Batch Operations ====================
+
+@router.post("/batch-delete")
+async def batch_delete_outputs(data: BatchIds, db: AsyncSession = Depends(get_db)):
+    """Delete multiple outputs at once."""
+    if not data.ids:
+        return error("请选择要删除的输出", 400)
+    if len(data.ids) > 100:
+        return error("单次最多删除100条", 400)
+
+    result = await db.execute(select(Output).where(Output.id.in_(data.ids)))
+    items = result.scalars().all()
+
+    deleted = 0
+    for item in items:
+        await db.delete(item)
+        deleted += 1
+
+    return success({"deleted": deleted}, f"成功删除 {deleted} 条输出")
+
+
+@router.post("/batch-export")
+async def batch_export_outputs(data: BatchIds, db: AsyncSession = Depends(get_db)):
+    """Export multiple outputs as JSON array."""
+    if not data.ids:
+        return error("请选择要导出的输出", 400)
+
+    result = await db.execute(
+        select(Output).options(
+            selectinload(Output.instance),
+            selectinload(Output.agent),
+            selectinload(Output.tags),
+        ).where(Output.id.in_(data.ids))
+    )
+    items = result.scalars().all()
+    data_list = [_output_to_dict(item) for item in items]
+    return success(data_list, f"导出 {len(data_list)} 条输出")

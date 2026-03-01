@@ -61,6 +61,12 @@ const routes = [
         meta: { title: '协作配置', icon: 'Connection' },
       },
       {
+        path: 'collaborations/:id/editor',
+        name: 'CollaborationEditor',
+        component: () => import('@/views/collaborations/editor/index.vue'),
+        meta: { title: '流程编辑器', hidden: true },
+      },
+      {
         path: 'settings',
         name: 'Settings',
         component: () => import('@/views/settings/index.vue'),
