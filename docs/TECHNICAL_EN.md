@@ -1,0 +1,388 @@
+# OpenClawCM Technical Documentation
+
+> This document provides a concise overview of key technical implementations in OpenClawCM for developers looking to understand the system internals.
+
+---
+
+## 1. Technology Stack
+
+| Layer | Technology | Version |
+|-------|-----------|---------|
+| Frontend Framework | Vue 3 (Composition API) | 3.5 |
+| UI Library | Element Plus | 2.13 |
+| Flow Editor | @vue-flow/core + background/controls/minimap | 1.48 |
+| Code Highlighting | highlight.js | 11.11 |
+| Markdown Rendering | marked | 17.0 |
+| Build Tool | Vite | 6.4 |
+| Backend Framework | FastAPI | 0.128 |
+| ORM | SQLAlchemy 2.0 (async) | 2.0.47 |
+| Database | SQLite (aiosqlite) / MySQL (aiomysql) | — |
+| Authentication | python-jose (JWT HS256) + bcrypt | — |
+| Deployment | Docker Compose (Nginx + uvicorn) | — |
+
+---
+
+## 2. Database Design
+
+### 2.1 Async Engine Initialization
+
+```python
+# database.py
+engine = create_async_engine(DATABASE_URL, echo=False)
+async_session = async_sessionmaker(engine, expire_on_commit=False)
+```
+
+- SQLite configured with **WAL mode** (`PRAGMA journal_mode=WAL`) for improved concurrent read/write performance
+- Seamless switch to MySQL in production by changing `DATABASE_URL`
+
+### 2.2 Data Model Overview (15 Models, 17 Tables)
+
+```
+User ─┐
+      ├─ AuditLog
+      │
+Instance ──┬── Agent ──┬── AgentSkill ←── Skill
+           │           ├── AgentMemoryPoolBinding ←── SharedMemoryPool
+           │           └── (model_config_id FK)
+           │
+ModelProvider ── ModelConfig
+           │
+Output ──┬── OutputTag
+         └── OutputAttachment
+           │
+Collaboration ──┬── CollaborationNode (→ Agent)
+                └── CollaborationEdge (→ Node × 2)
+
+SystemSetting (Key-Value config table)
+```
+
+All models inherit `TimestampMixin`, automatically maintaining `created_at` / `updated_at`.
+
+### 2.3 FTS5 Full-Text Search
+
+```python
+# Virtual table created on startup
+CREATE VIRTUAL TABLE IF NOT EXISTS outputs_fts
+USING fts5(title, summary, content, content=outputs, content_rowid=id);
+
+# Triggers keep FTS index in sync with the outputs table
+CREATE TRIGGER outputs_ai AFTER INSERT ON outputs BEGIN
+    INSERT INTO outputs_fts(rowid, title, summary, content)
+    VALUES (new.id, new.title, new.summary, new.content);
+END;
+```
+
+Queries use `MATCH` + `rank` ordering: first retrieve FTS rowid list, then load full ORM objects with `IN` clause (including relationships) to avoid N+1 problems.
+
+---
+
+## 3. Authentication & Authorization
+
+### 3.1 JWT Flow
+
+```
+Client POST /api/v1/auth/login {username, password}
+    → bcrypt.checkpw(password, stored_hash)
+    → jose.jwt.encode({sub: user_id, username, role}, SECRET_KEY, HS256)
+    → Returns {token, user} (24h expiry)
+
+Subsequent requests Header: Authorization: Bearer <token>
+    → require_auth dependency decodes and validates
+    → require_admin additionally checks role == "admin"
+```
+
+### 3.2 Password Security
+
+Direct `bcrypt` hashing with cost factor 12 (default), no passlib intermediate layer.
+
+### 3.3 Role Permissions
+
+| Role | Permissions |
+|------|-------------|
+| `admin` | Full read/write + user management + audit log access |
+| `operator` | Business operations on instances/agents/flows |
+| `viewer` | Read-only access |
+
+---
+
+## 4. API Design
+
+### 4.1 Unified Response Format
+
+```python
+def success(data=None, message="success"):
+    return {"code": 200, "message": message, "data": data}
+
+def error(message, code=400):
+    return JSONResponse({"code": code, "message": message, "data": None}, status_code=200)
+
+def page_response(data, total, page, page_size):
+    return {"code": 200, "message": "success",
+            "data": data, "total": total, "page": page, "page_size": page_size}
+```
+
+All APIs return HTTP 200; business errors are distinguished via the `code` field (400/401/404). The frontend interceptor handles errors uniformly based on `code`.
+
+### 4.2 Preventing ORM Lazy Loading
+
+Async ORM does not support implicit lazy loading. All queries needing related data use `selectinload`:
+
+```python
+query = select(Output).options(
+    selectinload(Output.instance),
+    selectinload(Output.agent),
+    selectinload(Output.tags),
+)
+```
+
+Response dictionaries are built manually (`_output_to_dict`) using `__dict__` inspection to avoid triggering unloaded relationship access.
+
+### 4.3 Router Module Breakdown (10 Modules, 86 Endpoints)
+
+| Module | Prefix | Endpoints | Key Features |
+|--------|--------|-----------|-------------|
+| auth | `/auth` | 7 | JWT login, user CRUD |
+| instances | `/instances` | 6 | Instance CRUD + health check |
+| models | `/models` | 9 | Provider + model config CRUD |
+| agents | `/agents` | 12 | Agent CRUD + start/stop + skill binding |
+| skills | `/skills` | 7 | Skill CRUD + install/uninstall |
+| outputs | `/outputs` | 10 | Output CRUD + FTS + tags + batch ops |
+| collaborations | `/collaborations` | 19 | Flow + nodes + edges + layout + control |
+| memory-pools | `/memory-pools` | 8 | Memory pool CRUD + agent binding |
+| dashboard | `/dashboard` | 3 | Statistics overview |
+| system | `/system` | 4 | System info + audit logs |
+
+---
+
+## 5. Audit Middleware
+
+```python
+class AuditMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        if request.method in ("POST", "PUT", "DELETE"):
+            # Decode JWT from Authorization header to extract user info
+            # Async write to audit_logs table (asyncio.create_task + 0.5s delay to avoid SQLite locks)
+        return response
+```
+
+- **Zero intrusion**: No manual logging required in business code
+- **SQLite lock avoidance**: Audit writes delayed 0.5s to avoid contention with business transactions
+- **Recorded fields**: user_id, username, HTTP method, resource_type, resource_id, request path, IP address
+
+---
+
+## 6. Collaboration Visual Flow Editor
+
+### 6.1 Data Model
+
+```
+Collaboration (1) ──→ (N) CollaborationNode
+                  ──→ (N) CollaborationEdge
+
+CollaborationNode:
+  - node_type: start | end | agent | condition | parallel_gateway
+  - agent_id: FK → Agent (agent type only)
+  - config_json: Condition/gateway configuration JSON
+  - position_x, position_y: Canvas coordinates
+
+CollaborationEdge:
+  - source_node_id, target_node_id: FK → CollaborationNode
+  - edge_type: default | success | failure | conditional
+  - condition_json: Condition expression
+```
+
+### 6.2 Frontend Editor Architecture
+
+```
+┌─────────────────────────────────────────────────┐
+│  Toolbar: Save / Start / Stop / Back             │
+├────────┬──────────────────────────┬──────────────┤
+│  Node  │      Vue Flow Canvas     │  Properties  │
+│ Palette│  Background + Controls   │    Panel     │
+│ (drag) │  + MiniMap + SnapGrid    │ (selection)  │
+│        │                          │              │
+│ · Start│   ┌───┐    ┌───┐        │ · Label      │
+│ · End  │   │ S ├───→│ A │        │ · Agent pick │
+│ · Cond.│   └───┘    └─┬─┘        │ · Config JSON│
+│ · Para.│              ↓          │ · Edge type  │
+│ · Agent│           ┌───┐         │              │
+│   list │           │ E │         │              │
+│        │           └───┘         │              │
+└────────┴──────────────────────────┴──────────────┘
+```
+
+**Interaction Flow**:
+1. **Drag to create**: Drag node from palette → `onDrop` calculates canvas position → `POST /nodes` → renders on canvas
+2. **Connect**: Drag Handle → `onConnect` → `POST /edges` → renders edge
+3. **Edit properties**: Click node/edge → right panel shows properties → on change `PUT /nodes/{id}` or `PUT /edges/{id}`
+4. **Save layout**: Click save → collect all node positions + viewport state → `PUT /layout` batch update
+
+### 6.3 Custom Node Component
+
+`AgentNode.vue` renders different icons and border styles based on `node_type`:
+
+| Node Type | Icon | Border |
+|-----------|------|--------|
+| start | VideoPlay | Green solid |
+| end | CircleClose | Red solid |
+| agent | UserFilled | Blue solid |
+| condition | Switch | Orange dashed |
+| parallel_gateway | Connection | Blue dotted |
+
+---
+
+## 7. Output Management Enhancements
+
+### 7.1 FTS5 Search Implementation
+
+```python
+# 1. FTS match to get ranked rowid list
+fts_sql = "SELECT rowid, rank FROM outputs_fts WHERE outputs_fts MATCH :q ORDER BY rank"
+
+# 2. Load full objects with ORM (including relationships)
+query = select(Output).options(selectinload(...)).where(Output.id.in_(row_ids))
+
+# 3. Restore FTS rank ordering
+item_map = {item.id: item for item in items}
+data = [_output_to_dict(item_map[rid]) for rid in row_ids if rid in item_map]
+```
+
+### 7.2 Code Syntax Highlighting
+
+```javascript
+// Auto-detect language with highlight.js
+import hljs from 'highlight.js'
+import 'highlight.js/styles/github-dark.css'
+
+const highlighted = item.content_type
+  ? hljs.highlight(content, { language: item.content_type })
+  : hljs.highlightAuto(content)
+```
+
+### 7.3 Batch Operations
+
+- **Batch delete**: `POST /outputs/batch-delete` + `{ids: [1,2,3]}` → max 100 per request
+- **Batch export**: `POST /outputs/batch-export` → returns JSON array, frontend generates downloadable file
+
+---
+
+## 8. Frontend Architecture
+
+### 8.1 HTTP Client Setup
+
+```javascript
+const api = axios.create({ baseURL: '/api/v1', timeout: 30000 })
+
+// Request interceptor: auto-inject JWT token
+api.interceptors.request.use(config => {
+    const token = localStorage.getItem('token')
+    if (token) config.headers.Authorization = `Bearer ${token}`
+    return config
+})
+
+// Response interceptor: unified error handling, 401 redirect to login
+api.interceptors.response.use(
+    response => response.data.code === 200 ? response.data : Promise.reject(response.data),
+    error => { /* Network error handling */ }
+)
+```
+
+### 8.2 Route Guard
+
+```javascript
+router.beforeEach((to) => {
+    if (!to.meta?.public && !localStorage.getItem('token')) {
+        return '/login'
+    }
+})
+```
+
+### 8.3 State Management
+
+Pinia manages user login state. UI states like sidebar collapse are stored locally in components.
+
+---
+
+## 9. Deployment
+
+### Docker Compose Dual-Service Architecture
+
+```yaml
+services:
+  backend:
+    build: ./backend
+    ports: ["8000:8000"]
+    volumes: ["./data:/app/data"]      # SQLite data persistence
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+
+  frontend:
+    build: ./frontend                  # Multi-stage: node build → nginx serve
+    ports: ["80:80"]
+    depends_on:
+      backend: { condition: service_healthy }
+```
+
+### Nginx Configuration Highlights
+
+```nginx
+# SPA route fallback
+location / {
+    try_files $uri $uri/ /index.html;
+}
+
+# API reverse proxy
+location /api/ {
+    proxy_pass http://backend:8000/api/;
+}
+```
+
+---
+
+## 10. Testing Strategy
+
+### Integration Tests (79 Test Cases)
+
+End-to-end testing using **curl + bash**, covering the full business workflow:
+
+```
+Create Instance → Create Provider → Create Model → Create Agent → Bind Skills
+→ Create Output → FTS Search → Batch Operations
+→ Create Collaboration → Add Nodes/Edges → Save Layout → Start/Stop Control
+→ Create Memory Pool → Bind Agent
+→ Dashboard / System Info / Audit Logs
+→ Cleanup + 404 Validation
+```
+
+Each test case verifies key field matches in the response, with full response body output on failure for debugging.
+
+---
+
+## Appendix: Key Dependency Versions
+
+### Backend
+
+| Package | Version |
+|---------|---------|
+| fastapi | 0.128.8 |
+| sqlalchemy | 2.0.47 |
+| aiosqlite | 0.22.1 |
+| pydantic | 2.12.5 |
+| uvicorn | 0.39.0 |
+| python-jose | 3.5.0 |
+| bcrypt | 4.0.1 |
+| loguru | 0.7.3 |
+| alembic | 1.16.5 |
+
+### Frontend
+
+| Package | Version |
+|---------|---------|
+| vue | 3.5.13 |
+| element-plus | 2.13.3 |
+| @vue-flow/core | 1.48.2 |
+| axios | 1.13.6 |
+| highlight.js | 11.11.1 |
+| marked | 17.0.3 |
+| vite | 6.3.5 |
