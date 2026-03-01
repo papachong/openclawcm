@@ -100,6 +100,15 @@ check "Start agent" '"status":"running"' "$R"
 R=$(curl -s -X POST "$BASE/agents/$AGENT_ID/stop")
 check "Stop agent" '"status":"stopped"' "$R"
 
+# Agent Memory Config
+echo ""
+echo "--- Agent Memory Config ---"
+R=$(curl -s -X PUT "$BASE/agents/$AGENT_ID" -H "Content-Type: application/json" -d '{"memory_type":"summary","max_history_messages":50,"max_token_limit":8000,"memory_persistence":true,"auto_cleanup_days":7}')
+check "Update agent memory config" '"memory_type":"summary"' "$R"
+
+R=$(curl -s "$BASE/agents/$AGENT_ID")
+check "Get agent memory fields" '"max_history_messages":50' "$R"
+
 # Skills
 echo ""
 echo "--- Skills Management ---"
@@ -109,6 +118,21 @@ SKILL_ID=$(echo "$R" | python3 -c "import sys,json;print(json.load(sys.stdin)['d
 
 R=$(curl -s "$BASE/skills")
 check "List skills" '"total":' "$R"
+
+# Agent Skills Binding
+echo ""
+echo "--- Agent Skills Binding ---"
+R=$(curl -s -X POST "$BASE/agents/$AGENT_ID/skills" -H "Content-Type: application/json" -d "{\"skill_id\":$SKILL_ID}")
+check "Bind skill to agent" '"code":200' "$R"
+
+R=$(curl -s "$BASE/agents/$AGENT_ID/skills")
+check "List agent skills" '"skill_name":"web_search"' "$R"
+
+R=$(curl -s -X POST "$BASE/agents/$AGENT_ID/skills" -H "Content-Type: application/json" -d "{\"skill_id\":$SKILL_ID}")
+check "Duplicate skill binding rejected" '"code":400' "$R"
+
+R=$(curl -s -X DELETE "$BASE/agents/$AGENT_ID/skills/$SKILL_ID")
+check "Unbind skill from agent" '"code":200' "$R"
 
 # Outputs
 echo ""
@@ -142,6 +166,40 @@ COLLAB_ID=$(echo "$R" | python3 -c "import sys,json;print(json.load(sys.stdin)['
 
 R=$(curl -s "$BASE/collaborations")
 check "List collaborations" '"total":' "$R"
+
+# Shared Memory Pools
+echo ""
+echo "--- Shared Memory Pool Management ---"
+R=$(curl -s -X POST "$BASE/memory-pools" -H "Content-Type: application/json" -d "{\"name\":\"code-review-memory\",\"memory_type\":\"buffer\",\"max_history_messages\":100,\"max_token_limit\":16000,\"collaboration_id\":$COLLAB_ID,\"description\":\"Shared memory for code review\"}")
+check "Create memory pool" '"code":200' "$R"
+POOL_ID=$(echo "$R" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['id'])")
+
+R=$(curl -s "$BASE/memory-pools")
+check "List memory pools" '"total":' "$R"
+
+R=$(curl -s "$BASE/memory-pools/$POOL_ID")
+check "Get memory pool" '"name":"code-review-memory"' "$R"
+
+R=$(curl -s -X PUT "$BASE/memory-pools/$POOL_ID" -H "Content-Type: application/json" -d '{"max_history_messages":200}')
+check "Update memory pool" '"max_history_messages":200' "$R"
+
+# Memory Pool Agent Binding
+echo ""
+echo "--- Memory Pool Agent Binding ---"
+R=$(curl -s -X POST "$BASE/memory-pools/$POOL_ID/agents" -H "Content-Type: application/json" -d "{\"agent_id\":$AGENT_ID,\"permission\":\"readwrite\"}")
+check "Bind agent to pool" '"code":200' "$R"
+
+R=$(curl -s "$BASE/memory-pools/$POOL_ID/agents")
+check "List pool agents" '"agent_id":' "$R"
+
+R=$(curl -s -X POST "$BASE/memory-pools/$POOL_ID/agents" -H "Content-Type: application/json" -d "{\"agent_id\":$AGENT_ID,\"permission\":\"read\"}")
+check "Duplicate pool binding rejected" '"code":400' "$R"
+
+R=$(curl -s -X DELETE "$BASE/memory-pools/$POOL_ID/agents/$AGENT_ID")
+check "Unbind agent from pool" '"code":200' "$R"
+
+R=$(curl -s -X DELETE "$BASE/memory-pools/$POOL_ID")
+check "Delete memory pool" '"code":200' "$R"
 
 # Dashboard
 echo ""

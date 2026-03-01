@@ -72,7 +72,7 @@ import { useAppStore } from '@/stores/app'
 import { ElMessage } from 'element-plus'
 import {
   Odometer, Monitor, Cpu, UserFilled, MagicStick,
-  Document, Connection, Setting, Fold, Expand
+  Document, Connection, Setting, Fold, Expand, Coin
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -108,6 +108,7 @@ const menuItems = [
   { path: '/agents', title: 'Agent管理', icon: 'UserFilled' },
   { path: '/skills', title: 'Skills管理', icon: 'MagicStick' },
   { path: '/outputs', title: '输出管理', icon: 'Document' },
+  { path: '/memory-pools', title: '共享记忆池', icon: 'Coin' },
   { path: '/collaborations', title: '协作配置', icon: 'Connection' },
   { path: '/settings', title: '系统设置', icon: 'Setting' },
 ]

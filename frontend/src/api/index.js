@@ -40,6 +40,10 @@ export const agentApi = {
   stop: (id) => request.post(`/agents/${id}/stop`),
   restart: (id) => request.post(`/agents/${id}/restart`),
   copy: (id, data) => request.post(`/agents/${id}/copy`, data),
+  // Skills binding
+  listSkills: (id) => request.get(`/agents/${id}/skills`),
+  bindSkill: (id, data) => request.post(`/agents/${id}/skills`, data),
+  unbindSkill: (agentId, skillId) => request.delete(`/agents/${agentId}/skills/${skillId}`),
 }
 
 // ==================== Skills管理 ====================
@@ -74,6 +78,19 @@ export const collaborationApi = {
   // 模板
   listTemplates: (params) => request.get('/collaborations/templates', { params }),
   saveAsTemplate: (id) => request.post(`/collaborations/${id}/save-template`),
+}
+
+// ==================== 共享记忆池 ====================
+export const memoryPoolApi = {
+  list: (params) => request.get('/memory-pools', { params }),
+  get: (id) => request.get(`/memory-pools/${id}`),
+  create: (data) => request.post('/memory-pools', data),
+  update: (id, data) => request.put(`/memory-pools/${id}`, data),
+  delete: (id) => request.delete(`/memory-pools/${id}`),
+  // Agent bindings
+  listAgents: (id) => request.get(`/memory-pools/${id}/agents`),
+  bindAgent: (id, data) => request.post(`/memory-pools/${id}/agents`, data),
+  unbindAgent: (poolId, agentId) => request.delete(`/memory-pools/${poolId}/agents/${agentId}`),
 }
 
 // ==================== 仪表盘 ====================

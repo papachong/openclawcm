@@ -49,6 +49,12 @@ const routes = [
         meta: { title: '输出管理', icon: 'Document' },
       },
       {
+        path: 'memory-pools',
+        name: 'MemoryPools',
+        component: () => import('@/views/memory-pools/index.vue'),
+        meta: { title: '共享记忆池', icon: 'Coin' },
+      },
+      {
         path: 'collaborations',
         name: 'Collaborations',
         component: () => import('@/views/collaborations/index.vue'),
