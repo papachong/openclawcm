@@ -37,11 +37,12 @@
             <Expand v-else />
           </el-icon>
           <el-breadcrumb separator="/">
-            <el-breadcrumb-item :to="{ path: '/' }">首页</el-breadcrumb-item>
+            <el-breadcrumb-item :to="{ path: '/' }">{{ $t('menu.home') }}</el-breadcrumb-item>
             <el-breadcrumb-item>{{ currentTitle }}</el-breadcrumb-item>
           </el-breadcrumb>
         </div>
         <div class="header-right">
+          <LanguageSwitch />
           <el-dropdown @command="handleUserCommand">
             <span class="user-info">
               <el-icon><UserFilled /></el-icon>
@@ -49,8 +50,8 @@
             </span>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="profile">个人设置</el-dropdown-item>
-                <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
+                <el-dropdown-item command="profile">{{ $t('layout.profile') }}</el-dropdown-item>
+                <el-dropdown-item command="logout" divided>{{ $t('layout.logout') }}</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -68,13 +69,16 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { ElMessage } from 'element-plus'
 import {
   Odometer, Monitor, Cpu, UserFilled, MagicStick,
   Document, Connection, Setting, Fold, Expand, Coin
 } from '@element-plus/icons-vue'
+import LanguageSwitch from '@/components/common/LanguageSwitch.vue'
 
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
@@ -83,37 +87,41 @@ const sidebarCollapsed = computed(() => appStore.sidebarCollapsed)
 const toggleSidebar = () => appStore.toggleSidebar()
 
 const currentRoute = computed(() => route.path)
-const currentTitle = computed(() => route.meta?.title || '')
+const currentTitle = computed(() => {
+  const titleKey = route.meta?.titleKey
+  if (titleKey) return t(titleKey)
+  return route.meta?.title || ''
+})
 
 const displayName = computed(() => {
   try {
     const user = JSON.parse(localStorage.getItem('user') || '{}')
-    return user.display_name || user.username || '用户'
-  } catch { return '用户' }
+    return user.display_name || user.username || t('layout.user')
+  } catch { return t('layout.user') }
 })
 
 const handleUserCommand = (command) => {
   if (command === 'logout') {
     localStorage.removeItem('token')
     localStorage.removeItem('user')
-    ElMessage.success('已退出登录')
+    ElMessage.success(t('layout.loggedOut'))
     router.push('/login')
   } else if (command === 'profile') {
     router.push('/settings')
   }
 }
 
-const menuItems = [
-  { path: '/dashboard', title: '仪表盘', icon: 'Odometer' },
-  { path: '/instances', title: '实例管理', icon: 'Monitor' },
-  { path: '/models', title: '模型管理', icon: 'Cpu' },
-  { path: '/agents', title: 'Agent管理', icon: 'UserFilled' },
-  { path: '/skills', title: 'Skills管理', icon: 'MagicStick' },
-  { path: '/outputs', title: '输出管理', icon: 'Document' },
-  { path: '/memory-pools', title: '共享记忆池', icon: 'Coin' },
-  { path: '/collaborations', title: '协作配置', icon: 'Connection' },
-  { path: '/settings', title: '系统设置', icon: 'Setting' },
-]
+const menuItems = computed(() => [
+  { path: '/dashboard', title: t('menu.dashboard'), icon: 'Odometer' },
+  { path: '/instances', title: t('menu.instances'), icon: 'Monitor' },
+  { path: '/models', title: t('menu.models'), icon: 'Cpu' },
+  { path: '/agents', title: t('menu.agents'), icon: 'UserFilled' },
+  { path: '/skills', title: t('menu.skills'), icon: 'MagicStick' },
+  { path: '/outputs', title: t('menu.outputs'), icon: 'Document' },
+  { path: '/memory-pools', title: t('menu.memoryPools'), icon: 'Coin' },
+  { path: '/collaborations', title: t('menu.collaborations'), icon: 'Connection' },
+  { path: '/settings', title: t('menu.settings'), icon: 'Setting' },
+])
 </script>
 
 <style scoped>
@@ -184,6 +192,7 @@ const menuItems = [
 .header-right {
   display: flex;
   align-items: center;
+  gap: 16px;
 }
 
 .user-info {

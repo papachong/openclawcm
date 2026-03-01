@@ -1,44 +1,44 @@
 <template>
   <div class="page-container">
     <div class="page-header">
-      <h2>共享记忆池</h2>
+      <h2>{{ $t('memoryPools.title') }}</h2>
       <el-button type="primary" @click="openCreateDialog">
-        <el-icon><Plus /></el-icon>新建记忆池
+        <el-icon><Plus /></el-icon>{{ $t('memoryPools.addPool') }}
       </el-button>
     </div>
 
     <!-- Pool List -->
     <el-card>
       <el-table :data="tableData" v-loading="loading" stripe>
-        <el-table-column prop="name" label="记忆池名称" min-width="160" />
-        <el-table-column prop="memory_type" label="记忆类型" width="120">
+        <el-table-column prop="name" :label="$t('memoryPools.poolName')" min-width="160" />
+        <el-table-column prop="memory_type" :label="$t('memoryPools.memoryType')" width="120">
           <template #default="{ row }">
             <el-tag size="small">{{ memoryTypeLabel(row.memory_type) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="max_history_messages" label="最大消息数" width="110" />
-        <el-table-column prop="max_token_limit" label="Token上限" width="110" />
-        <el-table-column prop="status" label="状态" width="90">
+        <el-table-column prop="max_history_messages" :label="$t('memoryPools.maxMessages')" width="110" />
+        <el-table-column prop="max_token_limit" :label="$t('memoryPools.tokenLimit')" width="110" />
+        <el-table-column prop="status" :label="$t('common.status')" width="90">
           <template #default="{ row }">
             <el-tag :type="row.status === 'active' ? 'success' : 'info'" size="small">
-              {{ row.status === 'active' ? '启用' : '停用' }}
+              {{ row.status === 'active' ? $t('common.enabled') : $t('common.disabled') }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="agent_count" label="Agent数" width="90" />
-        <el-table-column label="运行时统计" width="200">
+        <el-table-column prop="agent_count" :label="$t('memoryPools.agentCount')" width="90" />
+        <el-table-column :label="$t('memoryPools.runtimeStats')" width="200">
           <template #default="{ row }">
-            <span>消息: {{ row.message_count || 0 }}</span>
+            <span>{{ $t('memoryPools.messageCount') }} {{ row.message_count || 0 }}</span>
             <el-divider direction="vertical" />
-            <span>Token: {{ row.total_tokens || 0 }}</span>
+            <span>{{ $t('memoryPools.tokenCount') }} {{ row.total_tokens || 0 }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="description" label="描述" min-width="150" show-overflow-tooltip />
-        <el-table-column label="操作" width="220" fixed="right">
+        <el-table-column prop="description" :label="$t('common.description')" min-width="150" show-overflow-tooltip />
+        <el-table-column :label="$t('common.operation')" width="220" fixed="right">
           <template #default="{ row }">
-            <el-button size="small" @click="handleEdit(row)">编辑</el-button>
-            <el-button size="small" type="primary" @click="openAgentsDialog(row)">Agent绑定</el-button>
-            <el-button size="small" type="danger" @click="handleDelete(row)">删除</el-button>
+            <el-button size="small" @click="handleEdit(row)">{{ $t('common.edit') }}</el-button>
+            <el-button size="small" type="primary" @click="openAgentsDialog(row)">{{ $t('memoryPools.agentBinding') }}</el-button>
+            <el-button size="small" type="danger" @click="handleDelete(row)">{{ $t('common.delete') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -56,84 +56,86 @@
     </el-card>
 
     <!-- Create/Edit Dialog -->
-    <el-dialog v-model="showDialog" :title="editingId ? '编辑记忆池' : '新建记忆池'" width="600px" @close="resetForm">
+    <el-dialog v-model="showDialog" :title="editingId ? $t('memoryPools.editPool') : $t('memoryPools.addPool')" width="600px" @close="resetForm">
       <el-form :model="form" :rules="rules" ref="formRef" label-width="130px">
-        <el-form-item label="名称" prop="name">
-          <el-input v-model="form.name" placeholder="记忆池名称" />
+        <el-form-item :label="$t('common.name')" prop="name">
+          <el-input v-model="form.name" :placeholder="$t('memoryPools.poolNamePlaceholder')" />
         </el-form-item>
-        <el-form-item label="记忆类型" prop="memory_type">
+        <el-form-item :label="$t('memoryPools.memoryType')" prop="memory_type">
           <el-select v-model="form.memory_type">
-            <el-option label="缓冲记忆(Buffer)" value="buffer" />
-            <el-option label="摘要记忆(Summary)" value="summary" />
-            <el-option label="混合记忆(Buffer+Summary)" value="buffer_summary" />
+            <el-option :label="$t('memoryPools.memoryBuffer')" value="buffer" />
+            <el-option :label="$t('memoryPools.memorySummary')" value="summary" />
+            <el-option :label="$t('memoryPools.memoryMixed')" value="buffer_summary" />
           </el-select>
         </el-form-item>
-        <el-form-item label="最大历史消息数">
+        <el-form-item :label="$t('memoryPools.maxHistoryMessages')">
           <el-input-number v-model="form.max_history_messages" :min="1" :max="500" />
         </el-form-item>
-        <el-form-item label="最大Token限制">
+        <el-form-item :label="$t('memoryPools.maxTokenLimit')">
           <el-input-number v-model="form.max_token_limit" :min="100" :max="256000" :step="1000" />
         </el-form-item>
-        <el-form-item label="关联协作流程">
-          <el-select v-model="form.collaboration_id" placeholder="可选 - 关联协作流程" clearable>
+        <el-form-item :label="$t('memoryPools.relatedCollaboration')">
+          <el-select v-model="form.collaboration_id" :placeholder="$t('memoryPools.relatedCollaborationPlaceholder')" clearable>
             <el-option v-for="c in collaborations" :key="c.id" :label="c.name" :value="c.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="状态" v-if="editingId">
+        <el-form-item :label="$t('common.status')" v-if="editingId">
           <el-select v-model="form.status">
-            <el-option label="启用" value="active" />
-            <el-option label="停用" value="inactive" />
+            <el-option :label="$t('common.enabled')" value="active" />
+            <el-option :label="$t('common.disabled')" value="inactive" />
           </el-select>
         </el-form-item>
-        <el-form-item label="描述">
+        <el-form-item :label="$t('common.description')">
           <el-input v-model="form.description" type="textarea" :rows="2" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit" :loading="submitting">确定</el-button>
+        <el-button @click="showDialog = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="handleSubmit" :loading="submitting">{{ $t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- Agent Binding Dialog -->
-    <el-dialog v-model="showAgentsDialog" :title="`${currentPoolName} - Agent绑定`" width="650px">
+    <el-dialog v-model="showAgentsDialog" :title="$t('memoryPools.agentBindingTitle', { name: currentPoolName })" width="650px">
       <div style="margin-bottom: 16px; display: flex; gap: 8px;">
-        <el-select v-model="agentToAdd" placeholder="选择Agent" filterable style="flex: 1;">
+        <el-select v-model="agentToAdd" :placeholder="$t('memoryPools.selectAgent')" filterable style="flex: 1;">
           <el-option v-for="a in availableAgents" :key="a.id" :label="`${a.name} (${a.instance_name || ''})`" :value="a.id" />
         </el-select>
         <el-select v-model="permissionToAdd" style="width: 130px;">
-          <el-option label="读写" value="readwrite" />
-          <el-option label="只读" value="read" />
-          <el-option label="只写" value="write" />
+          <el-option :label="$t('memoryPools.readwrite')" value="readwrite" />
+          <el-option :label="$t('memoryPools.readonly')" value="read" />
+          <el-option :label="$t('memoryPools.writeonly')" value="write" />
         </el-select>
-        <el-button type="primary" @click="handleBindAgent" :disabled="!agentToAdd">绑定</el-button>
+        <el-button type="primary" @click="handleBindAgent" :disabled="!agentToAdd">{{ $t('agents.bind') }}</el-button>
       </div>
       <el-table :data="poolAgents" v-loading="agentsLoading" stripe>
-        <el-table-column prop="agent_name" label="Agent名称" min-width="150" />
-        <el-table-column prop="permission" label="权限" width="120">
+        <el-table-column prop="agent_name" :label="$t('memoryPools.agentName')" min-width="150" />
+        <el-table-column prop="permission" :label="$t('memoryPools.permission')" width="120">
           <template #default="{ row }">
             <el-tag :type="row.permission === 'readwrite' ? 'success' : row.permission === 'read' ? 'info' : 'warning'" size="small">
-              {{ { readwrite: '读写', read: '只读', write: '只写' }[row.permission] || row.permission }}
+              {{ { readwrite: $t('memoryPools.readwrite'), read: $t('memoryPools.readonly'), write: $t('memoryPools.writeonly') }[row.permission] || row.permission }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="100">
+        <el-table-column :label="$t('common.operation')" width="100">
           <template #default="{ row }">
-            <el-button size="small" type="danger" @click="handleUnbindAgent(row)">解绑</el-button>
+            <el-button size="small" type="danger" @click="handleUnbindAgent(row)">{{ $t('agents.unbind') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
-      <el-empty v-if="poolAgents.length === 0 && !agentsLoading" description="暂无绑定的Agent" />
+      <el-empty v-if="poolAgents.length === 0 && !agentsLoading" :description="$t('memoryPools.noAgentBound')" />
     </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { memoryPoolApi, agentApi, collaborationApi } from '@/api'
 
+const { t } = useI18n()
 const loading = ref(false)
 const submitting = ref(false)
 const showDialog = ref(false)
@@ -159,13 +161,14 @@ const form = reactive({
   collaboration_id: null, status: 'active',
 })
 
-const rules = {
-  name: [{ required: true, message: '请输入记忆池名称', trigger: 'blur' }],
-}
+const rules = computed(() => ({
+  name: [{ required: true, message: t('memoryPools.pleaseInputName'), trigger: 'blur' }],
+}))
 
-const memoryTypeLabel = (t) => ({
-  buffer: '缓冲', summary: '摘要', buffer_summary: '混合',
-}[t] || t)
+const memoryTypeLabel = (mt) => ({
+  buffer: t('memoryPools.memoryBufferShort'), summary: t('memoryPools.memorySummaryShort'),
+  buffer_summary: t('memoryPools.memoryMixedShort'),
+}[mt] || mt)
 
 const availableAgents = computed(() => {
   const boundIds = new Set(poolAgents.value.map(a => a.agent_id))
@@ -203,10 +206,10 @@ async function handleSubmit() {
   try {
     if (editingId.value) {
       await memoryPoolApi.update(editingId.value, form)
-      ElMessage.success('更新成功')
+      ElMessage.success(t('common.success.update'))
     } else {
       await memoryPoolApi.create(form)
-      ElMessage.success('创建成功')
+      ElMessage.success(t('common.success.create'))
     }
     showDialog.value = false
     loadData()
@@ -215,9 +218,9 @@ async function handleSubmit() {
 }
 
 async function handleDelete(row) {
-  await ElMessageBox.confirm(`确定删除记忆池 "${row.name}" 吗？绑定的Agent关系将一并删除。`, '提示', { type: 'warning' })
+  await ElMessageBox.confirm(t('memoryPools.confirmDelete', { name: row.name }), t('common.tip'), { type: 'warning' })
   await memoryPoolApi.delete(row.id)
-  ElMessage.success('删除成功')
+  ElMessage.success(t('common.success.delete'))
   loadData()
 }
 
@@ -255,7 +258,7 @@ async function handleBindAgent() {
     await memoryPoolApi.bindAgent(currentPoolId.value, {
       agent_id: agentToAdd.value, permission: permissionToAdd.value,
     })
-    ElMessage.success('绑定成功')
+    ElMessage.success(t('memoryPools.bindSuccess'))
     agentToAdd.value = null
     await loadPoolAgents()
     loadData()
@@ -263,9 +266,9 @@ async function handleBindAgent() {
 }
 
 async function handleUnbindAgent(row) {
-  await ElMessageBox.confirm(`确定解绑 "${row.agent_name}" 吗？`, '提示', { type: 'warning' })
+  await ElMessageBox.confirm(t('memoryPools.confirmUnbind', { name: row.agent_name }), t('common.tip'), { type: 'warning' })
   await memoryPoolApi.unbindAgent(currentPoolId.value, row.agent_id)
-  ElMessage.success('解绑成功')
+  ElMessage.success(t('memoryPools.unbindSuccess'))
   await loadPoolAgents()
   loadData()
 }

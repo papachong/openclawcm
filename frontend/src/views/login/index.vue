@@ -2,15 +2,15 @@
   <div class="login-container">
     <div class="login-card">
       <div class="login-header">
-        <h1>OpenClawCM</h1>
-        <p>OpenClaw 配置管理平台</p>
+        <h1>{{ $t('login.title') }}</h1>
+        <p>{{ $t('login.subtitle') }}</p>
       </div>
       <el-form ref="formRef" :model="form" :rules="rules" @submit.prevent="handleLogin">
         <el-form-item prop="username">
           <el-input
             v-model="form.username"
             prefix-icon="User"
-            placeholder="用户名"
+            :placeholder="$t('login.username')"
             size="large"
           />
         </el-form-item>
@@ -19,7 +19,7 @@
             v-model="form.password"
             prefix-icon="Lock"
             type="password"
-            placeholder="密码"
+            :placeholder="$t('login.password')"
             size="large"
             show-password
             @keyup.enter="handleLogin"
@@ -33,23 +33,25 @@
             style="width: 100%"
             @click="handleLogin"
           >
-            登 录
+            {{ $t('login.loginButton') }}
           </el-button>
         </el-form-item>
       </el-form>
       <div class="login-footer">
-        <span>默认账号: admin / admin123</span>
+        <span>{{ $t('login.defaultAccount') }}</span>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import request from '@/api/request'
 
+const { t } = useI18n()
 const router = useRouter()
 const formRef = ref(null)
 const loading = ref(false)
@@ -59,10 +61,10 @@ const form = reactive({
   password: '',
 })
 
-const rules = {
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
-}
+const rules = computed(() => ({
+  username: [{ required: true, message: t('login.pleaseInputUsername'), trigger: 'blur' }],
+  password: [{ required: true, message: t('login.pleaseInputPassword'), trigger: 'blur' }],
+}))
 
 const handleLogin = async () => {
   if (!formRef.value) return
@@ -75,13 +77,13 @@ const handleLogin = async () => {
       if (res.code === 200) {
         localStorage.setItem('token', res.data.token)
         localStorage.setItem('user', JSON.stringify(res.data.user))
-        ElMessage.success('登录成功')
+        ElMessage.success(t('login.success'))
         router.push('/')
       } else {
-        ElMessage.error(res.message || '登录失败')
+        ElMessage.error(res.message || t('login.failed'))
       }
     } catch (err) {
-      ElMessage.error('登录失败，请检查网络')
+      ElMessage.error(t('login.networkError'))
     } finally {
       loading.value = false
     }

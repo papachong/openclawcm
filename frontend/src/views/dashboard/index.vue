@@ -1,10 +1,10 @@
 <template>
   <div class="dashboard">
-    <h2>仪表盘</h2>
+    <h2>{{ $t('dashboard.title') }}</h2>
 
     <!-- Stats Cards -->
     <el-row :gutter="20" class="stats-row">
-      <el-col :span="4" v-for="stat in stats" :key="stat.label">
+      <el-col :span="4" v-for="stat in stats" :key="stat.key">
         <el-card shadow="hover" class="stat-card">
           <div class="stat-content">
             <div class="stat-icon" :style="{ backgroundColor: stat.color }">
@@ -23,13 +23,13 @@
     <el-row :gutter="20" class="chart-row">
       <el-col :span="16">
         <el-card>
-          <template #header><span>输出趋势 (近7天)</span></template>
+          <template #header><span>{{ $t('dashboard.outputTrend') }}</span></template>
           <v-chart class="chart" :option="trendOption" autoresize />
         </el-card>
       </el-col>
       <el-col :span="8">
         <el-card>
-          <template #header><span>Agent 状态分布</span></template>
+          <template #header><span>{{ $t('dashboard.agentStatus') }}</span></template>
           <v-chart class="chart" :option="agentPieOption" autoresize />
         </el-card>
       </el-col>
@@ -39,13 +39,13 @@
     <el-row :gutter="20" class="chart-row">
       <el-col :span="12">
         <el-card>
-          <template #header><span>输出类型分布</span></template>
+          <template #header><span>{{ $t('dashboard.outputTypeDistribution') }}</span></template>
           <v-chart class="chart" :option="outputBarOption" autoresize />
         </el-card>
       </el-col>
       <el-col :span="12">
         <el-card>
-          <template #header><span>实例健康状态</span></template>
+          <template #header><span>{{ $t('dashboard.instanceHealth') }}</span></template>
           <v-chart class="chart" :option="instancePieOption" autoresize />
         </el-card>
       </el-col>
@@ -55,23 +55,23 @@
     <el-row :gutter="20" class="chart-row">
       <el-col :span="14">
         <el-card>
-          <template #header><span>最近输出动态</span></template>
+          <template #header><span>{{ $t('dashboard.recentOutputs') }}</span></template>
           <el-table :data="recentOutputs" stripe size="small" v-if="recentOutputs.length">
-            <el-table-column prop="title" label="标题" min-width="160" show-overflow-tooltip />
-            <el-table-column prop="output_type" label="类型" width="90">
+            <el-table-column prop="title" :label="$t('dashboard.tableHeaders.title')" min-width="160" show-overflow-tooltip />
+            <el-table-column prop="output_type" :label="$t('dashboard.tableHeaders.type')" width="90">
               <template #default="{ row }">
                 <el-tag size="small">{{ row.output_type }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="agent_name" label="Agent" width="120" />
-            <el-table-column prop="created_at" label="时间" width="170" />
+            <el-table-column prop="agent_name" :label="$t('dashboard.tableHeaders.agent')" width="120" />
+            <el-table-column prop="created_at" :label="$t('dashboard.tableHeaders.time')" width="170" />
           </el-table>
-          <el-empty v-else description="暂无输出数据" />
+          <el-empty v-else :description="$t('dashboard.noOutputData')" />
         </el-card>
       </el-col>
       <el-col :span="10">
         <el-card>
-          <template #header><span>系统告警</span></template>
+          <template #header><span>{{ $t('dashboard.systemAlerts') }}</span></template>
           <div v-if="alerts.length">
             <el-alert
               v-for="(alert, idx) in alerts"
@@ -83,7 +83,7 @@
               style="margin-bottom: 8px"
             />
           </div>
-          <el-empty v-else description="无告警，一切正常 ✓" />
+          <el-empty v-else :description="$t('dashboard.noAlerts')" />
         </el-card>
       </el-col>
     </el-row>
@@ -91,7 +91,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { dashboardApi } from '@/api'
 import { Monitor, Cpu, UserFilled, Document, Connection, MagicStick } from '@element-plus/icons-vue'
 import { use } from 'echarts/core'
@@ -109,15 +110,18 @@ use([
   GridComponent, DatasetComponent,
 ])
 
-const stats = ref([
-  { label: '实例', value: 0, icon: 'Monitor', color: '#409EFF' },
-  { label: 'Agent', value: 0, icon: 'UserFilled', color: '#67C23A' },
-  { label: '活跃Agent', value: 0, icon: 'Cpu', color: '#E6A23C' },
-  { label: '输出', value: 0, icon: 'Document', color: '#F56C6C' },
-  { label: '协作流程', value: 0, icon: 'Connection', color: '#909399' },
-  { label: '技能', value: 0, icon: 'MagicStick', color: '#9B59B6' },
+const { t } = useI18n()
+
+const stats = computed(() => [
+  { key: 'instances', label: t('dashboard.stats.instances'), value: statsData.value[0], icon: 'Monitor', color: '#409EFF' },
+  { key: 'agents', label: t('dashboard.stats.agents'), value: statsData.value[1], icon: 'UserFilled', color: '#67C23A' },
+  { key: 'activeAgents', label: t('dashboard.stats.activeAgents'), value: statsData.value[2], icon: 'Cpu', color: '#E6A23C' },
+  { key: 'outputs', label: t('dashboard.stats.outputs'), value: statsData.value[3], icon: 'Document', color: '#F56C6C' },
+  { key: 'collaborations', label: t('dashboard.stats.collaborations'), value: statsData.value[4], icon: 'Connection', color: '#909399' },
+  { key: 'skills', label: t('dashboard.stats.skills'), value: statsData.value[5], icon: 'MagicStick', color: '#9B59B6' },
 ])
 
+const statsData = ref([0, 0, 0, 0, 0, 0])
 const recentOutputs = ref([])
 const alerts = ref([])
 
@@ -128,7 +132,7 @@ const trendOption = ref({
   xAxis: { type: 'category', data: [], boundaryGap: false },
   yAxis: { type: 'value', minInterval: 1 },
   series: [{
-    name: '输出数量', type: 'line', smooth: true, areaStyle: { opacity: 0.3 },
+    name: t('dashboard.outputCount'), type: 'line', smooth: true, areaStyle: { opacity: 0.3 },
     data: [], itemStyle: { color: '#409EFF' },
   }],
 })
@@ -167,7 +171,6 @@ const statusColors = { running: '#67C23A', stopped: '#909399', error: '#F56C6C',
 const instanceColors = { online: '#67C23A', offline: '#F56C6C', unknown: '#909399' }
 
 onMounted(async () => {
-  // Load all data in parallel
   const [overviewRes, trendsRes, agentRes, outputTypeRes, instanceRes, recentRes, alertsRes] = await Promise.allSettled([
     dashboardApi.getOverview(),
     dashboardApi.getOutputTrends({ days: 7 }),
@@ -178,18 +181,11 @@ onMounted(async () => {
     dashboardApi.getAlerts(),
   ])
 
-  // Overview stats
   if (overviewRes.status === 'fulfilled' && overviewRes.value?.data) {
     const d = overviewRes.value.data
-    stats.value[0].value = d.instance_count
-    stats.value[1].value = d.agent_count
-    stats.value[2].value = d.active_agent_count
-    stats.value[3].value = d.output_count
-    stats.value[4].value = d.collab_count
-    stats.value[5].value = d.skill_count
+    statsData.value = [d.instance_count, d.agent_count, d.active_agent_count, d.output_count, d.collab_count, d.skill_count]
   }
 
-  // Output trends
   if (trendsRes.status === 'fulfilled' && trendsRes.value?.data) {
     const tData = trendsRes.value.data
     trendOption.value = {
@@ -199,7 +195,6 @@ onMounted(async () => {
     }
   }
 
-  // Agent stats pie
   if (agentRes.status === 'fulfilled' && agentRes.value?.data) {
     const a = agentRes.value.data
     const pieData = Object.entries(a)
@@ -213,7 +208,6 @@ onMounted(async () => {
     }
   }
 
-  // Output type bar
   if (outputTypeRes.status === 'fulfilled' && outputTypeRes.value?.data) {
     const oData = outputTypeRes.value.data
     const barColors = ['#409EFF', '#67C23A', '#E6A23C', '#F56C6C', '#909399', '#9B59B6', '#1ABC9C']
@@ -227,7 +221,6 @@ onMounted(async () => {
     }
   }
 
-  // Instance health pie
   if (instanceRes.status === 'fulfilled' && instanceRes.value?.data) {
     const ih = instanceRes.value.data
     const ihData = Object.entries(ih)
@@ -241,12 +234,10 @@ onMounted(async () => {
     }
   }
 
-  // Recent outputs
   if (recentRes.status === 'fulfilled' && recentRes.value?.data) {
     recentOutputs.value = recentRes.value.data
   }
 
-  // Alerts
   if (alertsRes.status === 'fulfilled' && alertsRes.value?.data) {
     alerts.value = alertsRes.value.data
   }

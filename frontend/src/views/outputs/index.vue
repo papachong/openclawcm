@@ -1,38 +1,38 @@
 <template>
   <div class="page-container">
     <div class="page-header">
-      <h2>输出管理</h2>
+      <h2>{{ $t('outputs.title') }}</h2>
       <div class="header-actions" v-if="selectedIds.length > 0">
-        <el-tag type="info">已选 {{ selectedIds.length }} 项</el-tag>
-        <el-button size="small" type="primary" @click="handleBatchExport">批量导出</el-button>
-        <el-button size="small" type="danger" @click="handleBatchDelete">批量删除</el-button>
+        <el-tag type="info">{{ $t('outputs.selectedCount', { count: selectedIds.length }) }}</el-tag>
+        <el-button size="small" type="primary" @click="handleBatchExport">{{ $t('outputs.batchExport') }}</el-button>
+        <el-button size="small" type="danger" @click="handleBatchDelete">{{ $t('outputs.batchDelete') }}</el-button>
       </div>
     </div>
 
     <!-- Search & Filter -->
     <el-card class="search-card">
       <el-form :inline="true" :model="searchForm">
-        <el-form-item label="实例">
-          <el-select v-model="searchForm.instance_id" placeholder="全部实例" clearable>
+        <el-form-item :label="$t('outputs.instance')">
+          <el-select v-model="searchForm.instance_id" :placeholder="$t('outputs.allInstances')" clearable>
             <el-option v-for="inst in instances" :key="inst.id" :label="inst.name" :value="inst.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="Agent">
-          <el-select v-model="searchForm.agent_id" placeholder="全部Agent" clearable>
+        <el-form-item :label="$t('outputs.agent')">
+          <el-select v-model="searchForm.agent_id" :placeholder="$t('outputs.allAgents')" clearable>
             <el-option v-for="a in agents" :key="a.id" :label="a.name" :value="a.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="输出类型">
-          <el-select v-model="searchForm.output_type" placeholder="全部类型" clearable>
-            <el-option v-for="t in outputTypes" :key="t.value" :label="t.label" :value="t.value" />
+        <el-form-item :label="$t('outputs.outputType')">
+          <el-select v-model="searchForm.output_type" :placeholder="$t('outputs.allTypes')" clearable>
+            <el-option v-for="ot in outputTypes" :key="ot.value" :label="ot.label" :value="ot.value" />
           </el-select>
         </el-form-item>
-        <el-form-item label="关键词">
-          <el-input v-model="searchForm.keyword" placeholder="搜索内容..." clearable style="width: 250px" />
+        <el-form-item :label="$t('outputs.keyword')">
+          <el-input v-model="searchForm.keyword" :placeholder="$t('outputs.searchPlaceholder')" clearable style="width: 250px" />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="loadData">搜索</el-button>
-          <el-button @click="resetSearch">重置</el-button>
+          <el-button type="primary" @click="loadData">{{ $t('common.search') }}</el-button>
+          <el-button @click="resetSearch">{{ $t('common.reset') }}</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -40,8 +40,8 @@
     <!-- Output Type Tabs -->
     <el-card>
       <el-tabs v-model="currentType" @tab-change="loadData">
-        <el-tab-pane label="全部" name="all" />
-        <el-tab-pane v-for="t in outputTypes" :key="t.value" :label="t.label" :name="t.value" />
+        <el-tab-pane :label="$t('common.all')" name="all" />
+        <el-tab-pane v-for="ot in outputTypes" :key="ot.value" :label="ot.label" :name="ot.value" />
       </el-tabs>
 
       <!-- Output List with Checkbox -->
@@ -61,16 +61,16 @@
             </div>
             <div class="output-summary">{{ item.summary }}</div>
             <div class="output-meta">
-              <span>实例: {{ item.instance_name }}</span>
-              <span>Agent: {{ item.agent_name }}</span>
-              <span v-if="item.token_usage">Token: {{ item.token_usage }}</span>
+              <span>{{ $t('outputs.instanceLabel') }} {{ item.instance_name }}</span>
+              <span>{{ $t('outputs.agentLabel') }} {{ item.agent_name }}</span>
+              <span v-if="item.token_usage">{{ $t('outputs.tokenLabel') }} {{ item.token_usage }}</span>
               <span v-if="item.tags?.length">
                 <el-tag v-for="tag in item.tags" :key="tag" size="small" class="output-tag">{{ tag }}</el-tag>
               </span>
             </div>
           </div>
         </div>
-        <el-empty v-if="!loading && tableData.length === 0" description="暂无输出数据" />
+        <el-empty v-if="!loading && tableData.length === 0" :description="$t('outputs.noOutputData')" />
       </div>
 
       <div class="pagination-wrapper">
@@ -91,33 +91,30 @@
       <div v-if="detailItem" class="output-detail">
         <div class="detail-meta">
           <el-descriptions :column="2" border>
-            <el-descriptions-item label="类型">
+            <el-descriptions-item :label="$t('common.type')">
               <el-tag :type="typeTagColor(detailItem.output_type)">{{ typeLabel(detailItem.output_type) }}</el-tag>
             </el-descriptions-item>
-            <el-descriptions-item label="状态">{{ detailItem.status }}</el-descriptions-item>
-            <el-descriptions-item label="实例">{{ detailItem.instance_name }}</el-descriptions-item>
-            <el-descriptions-item label="Agent">{{ detailItem.agent_name }}</el-descriptions-item>
-            <el-descriptions-item label="创建时间">{{ detailItem.created_at }}</el-descriptions-item>
-            <el-descriptions-item label="Token用量">{{ detailItem.token_usage || '-' }}</el-descriptions-item>
+            <el-descriptions-item :label="$t('common.status')">{{ detailItem.status }}</el-descriptions-item>
+            <el-descriptions-item :label="$t('outputs.instance')">{{ detailItem.instance_name }}</el-descriptions-item>
+            <el-descriptions-item :label="$t('outputs.agent')">{{ detailItem.agent_name }}</el-descriptions-item>
+            <el-descriptions-item :label="$t('common.createdAt')">{{ detailItem.created_at }}</el-descriptions-item>
+            <el-descriptions-item :label="$t('outputs.tokenUsage')">{{ detailItem.token_usage || '-' }}</el-descriptions-item>
           </el-descriptions>
         </div>
 
         <div class="detail-content">
-          <h4>内容</h4>
-          <!-- Code type with syntax highlighting -->
+          <h4>{{ $t('outputs.content') }}</h4>
           <div v-if="detailItem.output_type === 'CODE'" class="code-block" v-html="highlightedCode" />
-          <!-- Document / Markdown rendering -->
           <div v-else-if="detailItem.output_type === 'DOCUMENT'" class="markdown-body" v-html="renderedMarkdown" />
-          <!-- Other types -->
           <pre v-else class="content-block">{{ detailItem.content || detailItem.raw_content }}</pre>
         </div>
 
         <div class="detail-actions">
           <el-button @click="handleToggleFavorite(detailItem)">
-            {{ detailItem.is_favorite ? '取消收藏' : '收藏' }}
+            {{ detailItem.is_favorite ? $t('outputs.cancelFavorite') : $t('outputs.favorite') }}
           </el-button>
-          <el-button type="primary" @click="handleExport(detailItem, 'markdown')">导出Markdown</el-button>
-          <el-button @click="handleExport(detailItem, 'json')">导出JSON</el-button>
+          <el-button type="primary" @click="handleExport(detailItem, 'markdown')">{{ $t('outputs.exportMarkdown') }}</el-button>
+          <el-button @click="handleExport(detailItem, 'json')">{{ $t('outputs.exportJSON') }}</el-button>
         </div>
       </div>
     </el-drawer>
@@ -126,6 +123,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { StarFilled } from '@element-plus/icons-vue'
 import { outputApi, instanceApi, agentApi } from '@/api'
@@ -133,6 +131,7 @@ import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
 import { marked } from 'marked'
 
+const { t } = useI18n()
 const loading = ref(false)
 const tableData = ref([])
 const detailVisible = ref(false)
@@ -144,22 +143,21 @@ const agents = ref([])
 const searchForm = reactive({ instance_id: '', agent_id: '', output_type: '', keyword: '' })
 const pagination = reactive({ page: 1, pageSize: 20, total: 0 })
 
-const outputTypes = [
-  { value: 'CODE', label: '代码', color: 'primary' },
-  { value: 'DOCUMENT', label: '文档', color: 'success' },
-  { value: 'DATA', label: '数据', color: 'warning' },
-  { value: 'CONVERSATION', label: '对话', color: 'info' },
-  { value: 'FILE', label: '文件', color: '' },
-  { value: 'COMMAND', label: '命令', color: 'danger' },
-  { value: 'STRUCTURED', label: '结构化', color: 'primary' },
-]
+const outputTypes = computed(() => [
+  { value: 'CODE', label: t('outputs.typeCode'), color: 'primary' },
+  { value: 'DOCUMENT', label: t('outputs.typeDocument'), color: 'success' },
+  { value: 'DATA', label: t('outputs.typeData'), color: 'warning' },
+  { value: 'CONVERSATION', label: t('outputs.typeConversation'), color: 'info' },
+  { value: 'FILE', label: t('outputs.typeFile'), color: '' },
+  { value: 'COMMAND', label: t('outputs.typeCommand'), color: 'danger' },
+  { value: 'STRUCTURED', label: t('outputs.typeStructured'), color: 'primary' },
+])
 
-const typeLabel = (t) => outputTypes.find(o => o.value === t)?.label || t
-const typeTagColor = (t) => outputTypes.find(o => o.value === t)?.color || 'info'
+const typeLabel = (ot) => outputTypes.value.find(o => o.value === ot)?.label || ot
+const typeTagColor = (ot) => outputTypes.value.find(o => o.value === ot)?.color || 'info'
 
 const selectedIds = computed(() => tableData.value.filter(i => i._selected).map(i => i.id))
 
-// Syntax highlighting for code
 const highlightedCode = computed(() => {
   if (!detailItem.value) return ''
   const code = detailItem.value.content || detailItem.value.raw_content || ''
@@ -174,20 +172,13 @@ const highlightedCode = computed(() => {
   }
 })
 
-// Markdown rendering
 const renderedMarkdown = computed(() => {
   if (!detailItem.value) return ''
   const content = detailItem.value.content || detailItem.value.raw_content || ''
-  try {
-    return marked(content)
-  } catch (e) {
-    return `<p>${content}</p>`
-  }
+  try { return marked(content) } catch (e) { return `<p>${content}</p>` }
 })
 
-function onSelectionChange() {
-  // Trigger reactivity on selectedIds
-}
+function onSelectionChange() {}
 
 async function loadData() {
   loading.value = true
@@ -221,7 +212,7 @@ async function handleToggleFavorite(item) {
   try {
     await outputApi.toggleFavorite(item.id)
     item.is_favorite = !item.is_favorite
-    ElMessage.success(item.is_favorite ? '已收藏' : '已取消收藏')
+    ElMessage.success(item.is_favorite ? t('outputs.favorited') : t('outputs.unfavorited'))
   } catch (e) { console.error(e) }
 }
 
@@ -235,7 +226,7 @@ async function handleExport(item, format) {
       const blob = new Blob([res.content], { type: 'text/markdown' })
       downloadBlob(blob, res.filename || `${item.title}.md`)
     }
-    ElMessage.success('导出成功')
+    ElMessage.success(t('outputs.exportSuccess'))
   } catch (e) { console.error(e) }
 }
 
@@ -248,10 +239,10 @@ function downloadBlob(blob, filename) {
 
 async function handleBatchDelete() {
   const ids = selectedIds.value
-  await ElMessageBox.confirm(`确定删除选中的 ${ids.length} 条输出吗？`, '批量删除', { type: 'warning' })
+  await ElMessageBox.confirm(t('outputs.confirmBatchDelete', { count: ids.length }), t('outputs.batchDeleteTitle'), { type: 'warning' })
   try {
     const res = await outputApi.batchDelete(ids)
-    ElMessage.success(`成功删除 ${res?.deleted || ids.length} 条`)
+    ElMessage.success(t('outputs.batchDeleteSuccess', { count: res?.deleted || ids.length }))
     loadData()
   } catch (e) { console.error(e) }
 }
@@ -263,7 +254,7 @@ async function handleBatchExport() {
     const items = Array.isArray(res) ? res : (res?.data || [])
     const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' })
     downloadBlob(blob, `outputs-export-${Date.now()}.json`)
-    ElMessage.success(`导出 ${items.length} 条`)
+    ElMessage.success(t('outputs.batchExportSuccess', { count: items.length }))
   } catch (e) { console.error(e) }
 }
 

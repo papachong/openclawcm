@@ -1,25 +1,25 @@
 <template>
   <div class="page-container">
     <div class="page-header">
-      <h2>Skills管理</h2>
+      <h2>{{ $t('skills.title') }}</h2>
       <el-button type="primary" @click="showDialog = true">
-        <el-icon><Plus /></el-icon>新增Skill
+        <el-icon><Plus /></el-icon>{{ $t('skills.addSkill') }}
       </el-button>
     </div>
 
     <el-card class="search-card">
       <el-form :inline="true" :model="searchForm">
-        <el-form-item label="Skill名称">
-          <el-input v-model="searchForm.name" placeholder="搜索" clearable />
+        <el-form-item :label="$t('skills.skillName')">
+          <el-input v-model="searchForm.name" :placeholder="$t('common.search')" clearable />
         </el-form-item>
-        <el-form-item label="状态">
-          <el-select v-model="searchForm.status" placeholder="全部" clearable>
-            <el-option label="已安装" value="installed" />
-            <el-option label="未安装" value="available" />
+        <el-form-item :label="$t('common.status')">
+          <el-select v-model="searchForm.status" :placeholder="$t('common.all')" clearable>
+            <el-option :label="$t('skills.installed')" value="installed" />
+            <el-option :label="$t('skills.notInstalled')" value="available" />
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="loadData">查询</el-button>
+          <el-button type="primary" @click="loadData">{{ $t('common.query') }}</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -31,52 +31,54 @@
           <div class="skill-header">
             <span class="skill-name">{{ skill.name }}</span>
             <el-tag :type="skill.status === 'installed' ? 'success' : 'info'" size="small">
-              {{ skill.status === 'installed' ? '已安装' : '可用' }}
+              {{ skill.status === 'installed' ? $t('skills.installed') : $t('skills.available') }}
             </el-tag>
           </div>
           <div class="skill-version">v{{ skill.version }}</div>
-          <p class="skill-desc">{{ skill.description || '暂无描述' }}</p>
+          <p class="skill-desc">{{ skill.description || $t('skills.noDescription') }}</p>
           <div class="skill-actions">
-            <el-button v-if="skill.status !== 'installed'" type="primary" size="small" @click="handleInstall(skill)">安装</el-button>
-            <el-button v-else type="warning" size="small" @click="handleUninstall(skill)">卸载</el-button>
-            <el-button size="small" @click="handleEdit(skill)">配置</el-button>
-            <el-button size="small" type="danger" @click="handleDelete(skill)">删除</el-button>
+            <el-button v-if="skill.status !== 'installed'" type="primary" size="small" @click="handleInstall(skill)">{{ $t('skills.install') }}</el-button>
+            <el-button v-else type="warning" size="small" @click="handleUninstall(skill)">{{ $t('skills.uninstall') }}</el-button>
+            <el-button size="small" @click="handleEdit(skill)">{{ $t('skills.configure') }}</el-button>
+            <el-button size="small" type="danger" @click="handleDelete(skill)">{{ $t('common.delete') }}</el-button>
           </div>
         </el-card>
       </el-col>
     </el-row>
-    <el-empty v-if="!loading && tableData.length === 0" description="暂无Skills" />
+    <el-empty v-if="!loading && tableData.length === 0" :description="$t('skills.noSkills')" />
 
     <!-- Create/Edit Dialog -->
-    <el-dialog v-model="showDialog" :title="editingId ? '编辑Skill' : '新增Skill'" width="550px" @close="resetForm">
+    <el-dialog v-model="showDialog" :title="editingId ? $t('skills.editSkill') : $t('skills.addSkill')" width="550px" @close="resetForm">
       <el-form :model="form" :rules="rules" ref="formRef" label-width="100px">
-        <el-form-item label="Skill名称" prop="name">
+        <el-form-item :label="$t('skills.skillName')" prop="name">
           <el-input v-model="form.name" />
         </el-form-item>
-        <el-form-item label="版本" prop="version">
+        <el-form-item :label="$t('skills.version')" prop="version">
           <el-input v-model="form.version" placeholder="1.0.0" />
         </el-form-item>
-        <el-form-item label="描述">
+        <el-form-item :label="$t('common.description')">
           <el-input v-model="form.description" type="textarea" :rows="3" />
         </el-form-item>
-        <el-form-item label="配置参数">
+        <el-form-item :label="$t('skills.configParams')">
           <el-input v-model="form.config_json" type="textarea" :rows="4" placeholder='{"key": "value"}' />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit" :loading="submitting">确定</el-button>
+        <el-button @click="showDialog = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="handleSubmit" :loading="submitting">{{ $t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { skillApi } from '@/api'
 
+const { t } = useI18n()
 const loading = ref(false)
 const submitting = ref(false)
 const showDialog = ref(false)
@@ -86,7 +88,9 @@ const tableData = ref([])
 const searchForm = reactive({ name: '', status: '' })
 
 const form = reactive({ name: '', version: '1.0.0', description: '', config_json: '' })
-const rules = { name: [{ required: true, message: '请输入Skill名称', trigger: 'blur' }] }
+const rules = computed(() => ({
+  name: [{ required: true, message: t('skills.pleaseInputName'), trigger: 'blur' }],
+}))
 
 async function loadData() {
   loading.value = true
@@ -109,10 +113,10 @@ async function handleSubmit() {
   try {
     if (editingId.value) {
       await skillApi.update(editingId.value, form)
-      ElMessage.success('更新成功')
+      ElMessage.success(t('common.success.update'))
     } else {
       await skillApi.create(form)
-      ElMessage.success('创建成功')
+      ElMessage.success(t('common.success.create'))
     }
     showDialog.value = false
     loadData()
@@ -120,11 +124,11 @@ async function handleSubmit() {
   finally { submitting.value = false }
 }
 
-async function handleInstall(skill) { await skillApi.install(skill.id); ElMessage.success('安装成功'); loadData() }
-async function handleUninstall(skill) { await skillApi.uninstall(skill.id); ElMessage.success('卸载成功'); loadData() }
+async function handleInstall(skill) { await skillApi.install(skill.id); ElMessage.success(t('skills.installSuccess')); loadData() }
+async function handleUninstall(skill) { await skillApi.uninstall(skill.id); ElMessage.success(t('skills.uninstallSuccess')); loadData() }
 async function handleDelete(skill) {
-  await ElMessageBox.confirm(`确定删除 "${skill.name}" 吗？`, '提示', { type: 'warning' })
-  await skillApi.delete(skill.id); ElMessage.success('删除成功'); loadData()
+  await ElMessageBox.confirm(t('skills.confirmDelete', { name: skill.name }), t('common.tip'), { type: 'warning' })
+  await skillApi.delete(skill.id); ElMessage.success(t('common.success.delete')); loadData()
 }
 function resetForm() { editingId.value = null; Object.assign(form, { name: '', version: '1.0.0', description: '', config_json: '' }) }
 

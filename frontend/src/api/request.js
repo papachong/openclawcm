@@ -1,5 +1,8 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import i18n from '@/i18n'
+
+const { t } = i18n.global
 
 const request = axios.create({
   baseURL: '/api/v1',
@@ -28,8 +31,8 @@ request.interceptors.response.use(
   (response) => {
     const res = response.data
     if (res.code !== 200) {
-      ElMessage.error(res.message || '请求失败')
-      return Promise.reject(new Error(res.message || '请求失败'))
+      ElMessage.error(res.message || t('request.failed'))
+      return Promise.reject(new Error(res.message || t('request.failed')))
     }
     return res
   },
@@ -40,7 +43,7 @@ request.interceptors.response.use(
       window.location.href = '/login'
       return Promise.reject(error)
     }
-    const message = error.response?.data?.detail || error.response?.data?.message || error.message || '网络错误'
+    const message = error.response?.data?.detail || error.response?.data?.message || error.message || t('request.networkError')
     ElMessage.error(message)
     return Promise.reject(error)
   }

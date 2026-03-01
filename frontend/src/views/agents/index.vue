@@ -1,33 +1,33 @@
 <template>
   <div class="page-container">
     <div class="page-header">
-      <h2>Agent管理</h2>
+      <h2>{{ $t('agents.title') }}</h2>
       <el-button type="primary" @click="openCreateDialog">
-        <el-icon><Plus /></el-icon>新增Agent
+        <el-icon><Plus /></el-icon>{{ $t('agents.addAgent') }}
       </el-button>
     </div>
 
     <!-- Filter -->
     <el-card class="search-card">
       <el-form :inline="true" :model="searchForm">
-        <el-form-item label="所属实例">
-          <el-select v-model="searchForm.instance_id" placeholder="全部实例" clearable>
+        <el-form-item :label="$t('agents.belongInstance')">
+          <el-select v-model="searchForm.instance_id" :placeholder="$t('agents.allInstances')" clearable>
             <el-option v-for="inst in instances" :key="inst.id" :label="inst.name" :value="inst.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="Agent名称">
-          <el-input v-model="searchForm.name" placeholder="搜索" clearable />
+        <el-form-item :label="$t('agents.agentName')">
+          <el-input v-model="searchForm.name" :placeholder="$t('common.search')" clearable />
         </el-form-item>
-        <el-form-item label="状态">
-          <el-select v-model="searchForm.status" placeholder="全部" clearable>
-            <el-option label="运行中" value="running" />
-            <el-option label="已停止" value="stopped" />
-            <el-option label="异常" value="error" />
+        <el-form-item :label="$t('common.status')">
+          <el-select v-model="searchForm.status" :placeholder="$t('common.all')" clearable>
+            <el-option :label="$t('agents.running')" value="running" />
+            <el-option :label="$t('agents.stopped')" value="stopped" />
+            <el-option :label="$t('agents.error')" value="error" />
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="loadData">查询</el-button>
-          <el-button @click="resetSearch">重置</el-button>
+          <el-button type="primary" @click="loadData">{{ $t('common.query') }}</el-button>
+          <el-button @click="resetSearch">{{ $t('common.reset') }}</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -35,29 +35,29 @@
     <!-- Agent Table -->
     <el-card>
       <el-table :data="tableData" v-loading="loading" stripe>
-        <el-table-column prop="name" label="Agent名称" min-width="150" />
-        <el-table-column prop="instance_name" label="所属实例" width="150" />
-        <el-table-column prop="role" label="角色" width="120" />
-        <el-table-column prop="model_name" label="使用模型" width="150" />
-        <el-table-column prop="memory_type" label="记忆类型" width="120">
+        <el-table-column prop="name" :label="$t('agents.agentName')" min-width="150" />
+        <el-table-column prop="instance_name" :label="$t('agents.belongInstance')" width="150" />
+        <el-table-column prop="role" :label="$t('agents.role')" width="120" />
+        <el-table-column prop="model_name" :label="$t('agents.useModel')" width="150" />
+        <el-table-column prop="memory_type" :label="$t('agents.memoryType')" width="120">
           <template #default="{ row }">
             <el-tag size="small">{{ memoryTypeLabel(row.memory_type) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="100">
+        <el-table-column prop="status" :label="$t('common.status')" width="100">
           <template #default="{ row }">
             <el-tag :type="statusType(row.status)">{{ statusLabel(row.status) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="skills_count" label="Skills数" width="80" />
-        <el-table-column label="操作" width="320" fixed="right">
+        <el-table-column prop="skills_count" :label="$t('agents.skillsCount')" width="80" />
+        <el-table-column :label="$t('common.operation')" width="320" fixed="right">
           <template #default="{ row }">
-            <el-button size="small" @click="handleEdit(row)">编辑</el-button>
+            <el-button size="small" @click="handleEdit(row)">{{ $t('common.edit') }}</el-button>
             <el-button size="small" type="primary" @click="openSkillsDialog(row)">Skills</el-button>
-            <el-button size="small" type="success" v-if="row.status !== 'running'" @click="handleStart(row)">启动</el-button>
-            <el-button size="small" type="warning" v-if="row.status === 'running'" @click="handleStop(row)">停止</el-button>
-            <el-button size="small" @click="handleCopy(row)">复制</el-button>
-            <el-button size="small" type="danger" @click="handleDelete(row)">删除</el-button>
+            <el-button size="small" type="success" v-if="row.status !== 'running'" @click="handleStart(row)">{{ $t('agents.start') }}</el-button>
+            <el-button size="small" type="warning" v-if="row.status === 'running'" @click="handleStop(row)">{{ $t('agents.stop') }}</el-button>
+            <el-button size="small" @click="handleCopy(row)">{{ $t('agents.copy') }}</el-button>
+            <el-button size="small" type="danger" @click="handleDelete(row)">{{ $t('common.delete') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -75,126 +75,128 @@
     </el-card>
 
     <!-- Create/Edit Agent Dialog (Tabbed) -->
-    <el-dialog v-model="showDialog" :title="editingId ? '编辑Agent' : '新增Agent'" width="720px" @close="resetForm">
+    <el-dialog v-model="showDialog" :title="editingId ? $t('agents.editAgent') : $t('agents.addAgent')" width="720px" @close="resetForm">
       <el-tabs v-model="activeTab">
         <!-- Tab 1: Basic Info -->
-        <el-tab-pane label="基本信息" name="basic">
+        <el-tab-pane :label="$t('agents.basicInfo')" name="basic">
           <el-form :model="form" :rules="rules" ref="formRef" label-width="120px">
-            <el-form-item label="Agent名称" prop="name">
-              <el-input v-model="form.name" placeholder="Agent名称" />
+            <el-form-item :label="$t('agents.agentName')" prop="name">
+              <el-input v-model="form.name" :placeholder="$t('agents.agentNamePlaceholder')" />
             </el-form-item>
-            <el-form-item label="所属实例" prop="instance_id">
-              <el-select v-model="form.instance_id" placeholder="选择实例">
+            <el-form-item :label="$t('agents.belongInstance')" prop="instance_id">
+              <el-select v-model="form.instance_id" :placeholder="$t('agents.selectInstance')">
                 <el-option v-for="inst in instances" :key="inst.id" :label="inst.name" :value="inst.id" />
               </el-select>
             </el-form-item>
-            <el-form-item label="角色" prop="role">
-              <el-input v-model="form.role" placeholder="如: 代码生成、文档编写" />
+            <el-form-item :label="$t('agents.role')" prop="role">
+              <el-input v-model="form.role" :placeholder="$t('agents.rolePlaceholder')" />
             </el-form-item>
-            <el-form-item label="使用模型" prop="model_config_id">
-              <el-select v-model="form.model_config_id" placeholder="选择模型配置（或使用全局默认）" clearable>
+            <el-form-item :label="$t('agents.useModel')" prop="model_config_id">
+              <el-select v-model="form.model_config_id" :placeholder="$t('agents.selectModel')" clearable>
                 <el-option v-for="m in modelConfigs" :key="m.id" :label="m.name" :value="m.id" />
               </el-select>
             </el-form-item>
-            <el-form-item label="System Prompt" prop="system_prompt">
-              <el-input v-model="form.system_prompt" type="textarea" :rows="5" placeholder="Agent的系统提示词" />
+            <el-form-item :label="$t('agents.systemPrompt')" prop="system_prompt">
+              <el-input v-model="form.system_prompt" type="textarea" :rows="5" :placeholder="$t('agents.systemPromptPlaceholder')" />
             </el-form-item>
-            <el-form-item label="描述">
+            <el-form-item :label="$t('common.description')">
               <el-input v-model="form.description" type="textarea" :rows="2" />
             </el-form-item>
           </el-form>
         </el-tab-pane>
 
         <!-- Tab 2: Memory Config -->
-        <el-tab-pane label="记忆配置" name="memory">
+        <el-tab-pane :label="$t('agents.memoryConfig')" name="memory">
           <el-form :model="form" label-width="140px">
-            <el-form-item label="记忆类型">
-              <el-select v-model="form.memory_type" placeholder="选择记忆类型">
-                <el-option label="缓冲记忆(Buffer)" value="buffer" />
-                <el-option label="摘要记忆(Summary)" value="summary" />
-                <el-option label="混合记忆(Buffer+Summary)" value="buffer_summary" />
-                <el-option label="无记忆(None)" value="none" />
+            <el-form-item :label="$t('agents.memoryType')">
+              <el-select v-model="form.memory_type" :placeholder="$t('agents.selectMemoryType')">
+                <el-option :label="$t('agents.memoryBuffer')" value="buffer" />
+                <el-option :label="$t('agents.memorySummary')" value="summary" />
+                <el-option :label="$t('agents.memoryMixed')" value="buffer_summary" />
+                <el-option :label="$t('agents.memoryNone')" value="none" />
               </el-select>
             </el-form-item>
-            <el-form-item label="最大历史消息数" v-if="form.memory_type !== 'none'">
+            <el-form-item :label="$t('agents.maxHistoryMessages')" v-if="form.memory_type !== 'none'">
               <el-input-number v-model="form.max_history_messages" :min="1" :max="200" />
-              <span class="form-tip">保留最近N轮对话</span>
+              <span class="form-tip">{{ $t('agents.keepRecentN') }}</span>
             </el-form-item>
-            <el-form-item label="最大Token限制" v-if="form.memory_type !== 'none'">
+            <el-form-item :label="$t('agents.maxTokenLimit')" v-if="form.memory_type !== 'none'">
               <el-input-number v-model="form.max_token_limit" :min="100" :max="128000" :step="500" />
-              <span class="form-tip">记忆内容的最大Token数</span>
+              <span class="form-tip">{{ $t('agents.maxTokenTip') }}</span>
             </el-form-item>
-            <el-form-item label="摘要用模型" v-if="form.memory_type === 'summary' || form.memory_type === 'buffer_summary'">
-              <el-select v-model="form.summary_model_id" placeholder="默认使用Agent主模型" clearable>
+            <el-form-item :label="$t('agents.summaryModel')" v-if="form.memory_type === 'summary' || form.memory_type === 'buffer_summary'">
+              <el-select v-model="form.summary_model_id" :placeholder="$t('agents.summaryModelDefault')" clearable>
                 <el-option v-for="m in modelConfigs" :key="m.id" :label="m.name" :value="m.id" />
               </el-select>
-              <div class="form-tip">可选择低成本模型用于摘要生成</div>
+              <div class="form-tip">{{ $t('agents.summaryModelTip') }}</div>
             </el-form-item>
-            <el-form-item label="持久化记忆" v-if="form.memory_type !== 'none'">
-              <el-switch v-model="memoryPersistence" active-text="是" inactive-text="否" />
-              <span class="form-tip">Agent重启后是否恢复记忆</span>
+            <el-form-item :label="$t('agents.memoryPersistence')" v-if="form.memory_type !== 'none'">
+              <el-switch v-model="memoryPersistence" :active-text="$t('agents.yes')" :inactive-text="$t('agents.no')" />
+              <span class="form-tip">{{ $t('agents.persistenceTip') }}</span>
             </el-form-item>
-            <el-form-item label="自动清理(天)" v-if="form.memory_type !== 'none'">
+            <el-form-item :label="$t('agents.autoCleanup')" v-if="form.memory_type !== 'none'">
               <el-input-number v-model="form.auto_cleanup_days" :min="0" :max="365" />
-              <span class="form-tip">0 为不自动清理</span>
+              <span class="form-tip">{{ $t('agents.autoCleanupTip') }}</span>
             </el-form-item>
             <!-- Memory type description -->
             <el-alert v-if="form.memory_type === 'buffer'" type="info" :closable="false" class="memory-tip">
-              <template #title>缓冲记忆：保留最近N轮对话的原始内容，适合短期任务和简单对话场景。</template>
+              <template #title>{{ $t('agents.bufferDesc') }}</template>
             </el-alert>
             <el-alert v-if="form.memory_type === 'summary'" type="info" :closable="false" class="memory-tip">
-              <template #title>摘要记忆：用LLM对历史对话进行摘要压缩，适合长对话、低Token消耗场景。</template>
+              <template #title>{{ $t('agents.summaryDesc') }}</template>
             </el-alert>
             <el-alert v-if="form.memory_type === 'buffer_summary'" type="info" :closable="false" class="memory-tip">
-              <template #title>混合记忆：近期对话保留原文 + 早期对话压缩为摘要，平衡精度与成本。</template>
+              <template #title>{{ $t('agents.mixedDesc') }}</template>
             </el-alert>
             <el-alert v-if="form.memory_type === 'none'" type="warning" :closable="false" class="memory-tip">
-              <template #title>无记忆模式：每次调用无状态，不保留历史上下文，适合单次任务。</template>
+              <template #title>{{ $t('agents.noneDesc') }}</template>
             </el-alert>
           </el-form>
         </el-tab-pane>
       </el-tabs>
       <template #footer>
-        <el-button @click="showDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit" :loading="submitting">确定</el-button>
+        <el-button @click="showDialog = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="handleSubmit" :loading="submitting">{{ $t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- Skills Binding Dialog -->
-    <el-dialog v-model="showSkillsDialog" :title="`${currentAgentName} - Skills管理`" width="650px">
+    <el-dialog v-model="showSkillsDialog" :title="$t('agents.skillsManage', { name: currentAgentName })" width="650px">
       <div style="margin-bottom: 16px; display: flex; gap: 8px;">
-        <el-select v-model="skillToAdd" placeholder="选择要绑定的Skill" filterable style="flex: 1;">
+        <el-select v-model="skillToAdd" :placeholder="$t('agents.selectSkill')" filterable style="flex: 1;">
           <el-option v-for="s in availableSkills" :key="s.id" :label="`${s.name} (v${s.version})`" :value="s.id" />
         </el-select>
-        <el-button type="primary" @click="handleBindSkill" :disabled="!skillToAdd">绑定</el-button>
+        <el-button type="primary" @click="handleBindSkill" :disabled="!skillToAdd">{{ $t('agents.bind') }}</el-button>
       </div>
       <el-table :data="agentSkills" v-loading="skillsLoading" stripe>
-        <el-table-column prop="skill_name" label="Skill名称" min-width="150" />
-        <el-table-column prop="skill_version" label="版本" width="100" />
-        <el-table-column prop="skill_status" label="状态" width="100">
+        <el-table-column prop="skill_name" :label="$t('agents.skillName')" min-width="150" />
+        <el-table-column prop="skill_version" :label="$t('agents.version')" width="100" />
+        <el-table-column prop="skill_status" :label="$t('common.status')" width="100">
           <template #default="{ row }">
             <el-tag :type="row.skill_status === 'installed' ? 'success' : 'info'" size="small">
-              {{ row.skill_status === 'installed' ? '已安装' : '可用' }}
+              {{ row.skill_status === 'installed' ? $t('agents.installed') : $t('agents.available') }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="100">
+        <el-table-column :label="$t('common.operation')" width="100">
           <template #default="{ row }">
-            <el-button size="small" type="danger" @click="handleUnbindSkill(row)">解绑</el-button>
+            <el-button size="small" type="danger" @click="handleUnbindSkill(row)">{{ $t('agents.unbind') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
-      <el-empty v-if="agentSkills.length === 0 && !skillsLoading" description="暂无绑定的Skills" />
+      <el-empty v-if="agentSkills.length === 0 && !skillsLoading" :description="$t('agents.noSkills')" />
     </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { agentApi, instanceApi, modelApi, skillApi } from '@/api'
 
+const { t } = useI18n()
 const loading = ref(false)
 const submitting = ref(false)
 const showDialog = ref(false)
@@ -225,10 +227,10 @@ const form = reactive({
   summary_model_id: null, memory_persistence: 1, auto_cleanup_days: 0,
 })
 
-const rules = {
-  name: [{ required: true, message: '请输入Agent名称', trigger: 'blur' }],
-  instance_id: [{ required: true, message: '请选择所属实例', trigger: 'change' }],
-}
+const rules = computed(() => ({
+  name: [{ required: true, message: t('agents.pleaseInputName'), trigger: 'blur' }],
+  instance_id: [{ required: true, message: t('agents.pleaseSelectInstance'), trigger: 'change' }],
+}))
 
 // Computed: switch boolean <-> int for memory_persistence
 const memoryPersistence = computed({
@@ -243,10 +245,13 @@ const availableSkills = computed(() => {
 })
 
 const statusType = (s) => ({ running: 'success', stopped: 'info', error: 'danger' }[s] || 'info')
-const statusLabel = (s) => ({ running: '运行中', stopped: '已停止', error: '异常' }[s] || s)
-const memoryTypeLabel = (t) => ({
-  buffer: '缓冲', summary: '摘要', buffer_summary: '混合', none: '无记忆'
-}[t] || t)
+const statusLabel = (s) => ({
+  running: t('agents.running'), stopped: t('agents.stopped'), error: t('agents.error')
+}[s] || s)
+const memoryTypeLabel = (mt) => ({
+  buffer: t('agents.memoryBufferShort'), summary: t('agents.memorySummaryShort'),
+  buffer_summary: t('agents.memoryMixedShort'), none: t('agents.memoryNoneShort')
+}[mt] || mt)
 
 async function loadData() {
   loading.value = true
@@ -294,10 +299,10 @@ async function handleSubmit() {
   try {
     if (editingId.value) {
       await agentApi.update(editingId.value, form)
-      ElMessage.success('更新成功')
+      ElMessage.success(t('common.success.update'))
     } else {
       await agentApi.create(form)
-      ElMessage.success('创建成功')
+      ElMessage.success(t('common.success.create'))
     }
     showDialog.value = false
     loadData()
@@ -306,18 +311,18 @@ async function handleSubmit() {
 }
 
 async function handleDelete(row) {
-  await ElMessageBox.confirm(`确定删除 "${row.name}" 吗？`, '提示', { type: 'warning' })
+  await ElMessageBox.confirm(t('agents.confirmDelete', { name: row.name }), t('common.tip'), { type: 'warning' })
   await agentApi.delete(row.id)
-  ElMessage.success('删除成功')
+  ElMessage.success(t('common.success.delete'))
   loadData()
 }
 
-async function handleStart(row) { await agentApi.start(row.id); ElMessage.success('启动成功'); loadData() }
-async function handleStop(row) { await agentApi.stop(row.id); ElMessage.success('已停止'); loadData() }
+async function handleStart(row) { await agentApi.start(row.id); ElMessage.success(t('agents.startSuccess')); loadData() }
+async function handleStop(row) { await agentApi.stop(row.id); ElMessage.success(t('agents.stopSuccess')); loadData() }
 async function handleCopy(row) {
-  await ElMessageBox.confirm(`复制 "${row.name}"？`, '复制Agent')
+  await ElMessageBox.confirm(t('agents.confirmCopy', { name: row.name }), t('agents.copyAgent'))
   await agentApi.copy(row.id, {})
-  ElMessage.success('复制成功')
+  ElMessage.success(t('agents.copySuccess'))
   loadData()
 }
 
@@ -354,17 +359,17 @@ async function handleBindSkill() {
   if (!skillToAdd.value) return
   try {
     await agentApi.bindSkill(currentAgentId.value, { skill_id: skillToAdd.value })
-    ElMessage.success('绑定成功')
+    ElMessage.success(t('agents.bindSuccess'))
     skillToAdd.value = null
     await loadAgentSkills()
-    loadData() // refresh skills_count in table
+    loadData()
   } catch (e) { console.error(e) }
 }
 
 async function handleUnbindSkill(row) {
-  await ElMessageBox.confirm(`确定解绑 "${row.skill_name}" 吗？`, '提示', { type: 'warning' })
+  await ElMessageBox.confirm(t('agents.confirmUnbind', { name: row.skill_name }), t('common.tip'), { type: 'warning' })
   await agentApi.unbindSkill(currentAgentId.value, row.skill_id)
-  ElMessage.success('解绑成功')
+  ElMessage.success(t('agents.unbindSuccess'))
   await loadAgentSkills()
   loadData()
 }

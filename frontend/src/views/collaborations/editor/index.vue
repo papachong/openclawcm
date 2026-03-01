@@ -4,20 +4,20 @@
     <div class="editor-toolbar">
       <div class="toolbar-left">
         <el-button @click="goBack" :icon="ArrowLeft" circle />
-        <span class="flow-name">{{ flowData.name || '加载中...' }}</span>
-        <el-tag :type="statusTagType" size="small">{{ statusLabel }}</el-tag>
+        <span class="flow-name">{{ flowData.name || $t('common.loading') }}</span>
+        <el-tag :type="statusTagType" size="small">{{ statusLabelText }}</el-tag>
       </div>
       <div class="toolbar-right">
-        <el-button @click="handleSaveLayout" :loading="saving" type="primary" :icon="FolderChecked">保存布局</el-button>
-        <el-button v-if="flowData.status !== 'running'" @click="handleStart" type="success" :icon="VideoPlay">启动</el-button>
-        <el-button v-else @click="handleStop" type="danger" :icon="VideoPause">停止</el-button>
+        <el-button @click="handleSaveLayout" :loading="saving" type="primary" :icon="FolderChecked">{{ $t('flowEditor.saveLayout') }}</el-button>
+        <el-button v-if="flowData.status !== 'running'" @click="handleStart" type="success" :icon="VideoPlay">{{ $t('flowEditor.start') }}</el-button>
+        <el-button v-else @click="handleStop" type="danger" :icon="VideoPause">{{ $t('flowEditor.stop') }}</el-button>
       </div>
     </div>
 
     <div class="editor-body">
       <!-- Left Panel: node palette -->
       <div class="node-palette">
-        <div class="palette-title">节点面板</div>
+        <div class="palette-title">{{ $t('flowEditor.nodePanel') }}</div>
         <div
           v-for="nt in nodeTypes"
           :key="nt.type"
@@ -29,7 +29,7 @@
           <span>{{ nt.label }}</span>
         </div>
 
-        <el-divider>可用Agent</el-divider>
+        <el-divider>{{ $t('flowEditor.availableAgents') }}</el-divider>
         <div
           v-for="agent in allAgents"
           :key="agent.id"
@@ -67,48 +67,48 @@
       <div class="props-panel" v-if="selectedNode || selectedEdge">
         <!-- Node Properties -->
         <template v-if="selectedNode">
-          <div class="panel-title">节点属性</div>
+          <div class="panel-title">{{ $t('flowEditor.nodeProperties') }}</div>
           <el-form label-width="80px" size="small">
-            <el-form-item label="类型">
+            <el-form-item :label="$t('common.type')">
               <el-tag size="small">{{ nodeTypeLabel(selectedNode.data.node_type) }}</el-tag>
             </el-form-item>
-            <el-form-item label="标签">
+            <el-form-item :label="$t('flowEditor.label')">
               <el-input v-model="selectedNode.data.label" @change="onNodePropChange" />
             </el-form-item>
             <el-form-item label="Agent" v-if="selectedNode.data.node_type === 'agent'">
-              <el-select v-model="selectedNode.data.agent_id" @change="onAgentChange" clearable placeholder="选择Agent">
+              <el-select v-model="selectedNode.data.agent_id" @change="onAgentChange" clearable :placeholder="$t('flowEditor.selectAgent')">
                 <el-option v-for="a in allAgents" :key="a.id" :label="a.name" :value="a.id" />
               </el-select>
             </el-form-item>
-            <el-form-item label="配置JSON" v-if="selectedNode.data.node_type === 'condition'">
+            <el-form-item :label="$t('flowEditor.configJSON')" v-if="selectedNode.data.node_type === 'condition'">
               <el-input v-model="selectedNode.data.config_json" type="textarea" :rows="4" @change="onNodePropChange" placeholder='{"expr": "output.score > 0.8"}' />
             </el-form-item>
             <el-form-item>
-              <el-button type="danger" size="small" @click="deleteSelectedNode">删除节点</el-button>
+              <el-button type="danger" size="small" @click="deleteSelectedNode">{{ $t('flowEditor.deleteNode') }}</el-button>
             </el-form-item>
           </el-form>
         </template>
 
         <!-- Edge Properties -->
         <template v-if="selectedEdge && !selectedNode">
-          <div class="panel-title">连线属性</div>
+          <div class="panel-title">{{ $t('flowEditor.edgeProperties') }}</div>
           <el-form label-width="80px" size="small">
-            <el-form-item label="标签">
+            <el-form-item :label="$t('flowEditor.label')">
               <el-input v-model="selectedEdge.data.label" @change="onEdgePropChange" />
             </el-form-item>
-            <el-form-item label="类型">
+            <el-form-item :label="$t('common.type')">
               <el-select v-model="selectedEdge.data.edge_type" @change="onEdgePropChange">
-                <el-option label="默认" value="default" />
-                <el-option label="成功" value="success" />
-                <el-option label="失败" value="failure" />
-                <el-option label="条件" value="conditional" />
+                <el-option :label="$t('flowEditor.edgeDefault')" value="default" />
+                <el-option :label="$t('flowEditor.edgeSuccess')" value="success" />
+                <el-option :label="$t('flowEditor.edgeFailure')" value="failure" />
+                <el-option :label="$t('flowEditor.edgeConditional')" value="conditional" />
               </el-select>
             </el-form-item>
-            <el-form-item label="条件JSON" v-if="selectedEdge.data.edge_type === 'conditional'">
+            <el-form-item :label="$t('flowEditor.conditionJSON')" v-if="selectedEdge.data.edge_type === 'conditional'">
               <el-input v-model="selectedEdge.data.condition_json" type="textarea" :rows="3" @change="onEdgePropChange" />
             </el-form-item>
             <el-form-item>
-              <el-button type="danger" size="small" @click="deleteSelectedEdge">删除连线</el-button>
+              <el-button type="danger" size="small" @click="deleteSelectedEdge">{{ $t('flowEditor.deleteEdge') }}</el-button>
             </el-form-item>
           </el-form>
         </template>
@@ -120,6 +120,7 @@
 <script setup>
 import { ref, computed, onMounted, markRaw, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import {
   ArrowLeft, VideoPlay, VideoPause, FolderChecked,
@@ -137,6 +138,7 @@ import '@vue-flow/minimap/dist/style.css'
 import AgentNode from './AgentNode.vue'
 import { collaborationApi, agentApi } from '@/api'
 
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const collabId = computed(() => Number(route.params.id))
@@ -155,24 +157,31 @@ const customNodeTypes = { agent: markRaw(AgentNode) }
 
 const { addNodes, addEdges, removeNodes, removeEdges, project } = useVueFlow()
 
-const nodeTypes = [
-  { type: 'start', label: '开始节点', icon: 'VideoPlay', color: '#67C23A' },
-  { type: 'end', label: '结束节点', icon: 'CircleClose', color: '#F56C6C' },
-  { type: 'condition', label: '条件分支', icon: 'Switch', color: '#E6A23C' },
-  { type: 'parallel_gateway', label: '并行网关', icon: 'Connection', color: '#409EFF' },
-]
+const nodeTypes = computed(() => [
+  { type: 'start', label: t('flowEditor.startNode'), icon: 'VideoPlay', color: '#67C23A' },
+  { type: 'end', label: t('flowEditor.endNode'), icon: 'CircleClose', color: '#F56C6C' },
+  { type: 'condition', label: t('flowEditor.conditionNode'), icon: 'Switch', color: '#E6A23C' },
+  { type: 'parallel_gateway', label: t('flowEditor.parallelGateway'), icon: 'Connection', color: '#409EFF' },
+])
 
 const statusTagType = computed(() => {
   const m = { running: 'success', inactive: 'info', error: 'danger', active: 'success' }
   return m[flowData.value.status] || 'info'
 })
-const statusLabel = computed(() => {
-  const m = { running: '运行中', inactive: '已停止', error: '错误', active: '运行中' }
+const statusLabelText = computed(() => {
+  const m = {
+    running: t('collaborations.running'), inactive: t('collaborations.stopped'),
+    error: t('collaborations.errorStatus'), active: t('collaborations.running'),
+  }
   return m[flowData.value.status] || flowData.value.status
 })
 
-function nodeTypeLabel(t) {
-  return { agent: 'Agent', start: '开始', end: '结束', condition: '条件', parallel_gateway: '并行网关' }[t] || t
+function nodeTypeLabel(nt) {
+  return {
+    agent: t('flowEditor.nodeAgent'), start: t('flowEditor.nodeStart'),
+    end: t('flowEditor.nodeEnd'), condition: t('flowEditor.nodeCondition'),
+    parallel_gateway: t('flowEditor.nodeParallelGateway'),
+  }[nt] || nt
 }
 
 function goBack() { router.push('/collaborations') }
@@ -203,7 +212,7 @@ async function loadFlow() {
     }))
   } catch (e) {
     console.error(e)
-    ElMessage.error('加载流程失败')
+    ElMessage.error(t('flowEditor.loadFailed'))
   }
 }
 
@@ -256,10 +265,10 @@ async function onDrop(evt) {
       data: { ...n },
     }
     addNodes([newNode])
-    ElMessage.success('节点已添加')
+    ElMessage.success(t('flowEditor.nodeAdded'))
   } catch (e) {
     console.error(e)
-    ElMessage.error('添加节点失败')
+    ElMessage.error(t('flowEditor.addNodeFailed'))
   }
 
   dragType = null
@@ -284,7 +293,7 @@ async function onConnect(params) {
     }])
   } catch (e) {
     console.error(e)
-    ElMessage.error('创建连线失败')
+    ElMessage.error(t('flowEditor.createEdgeFailed'))
   }
 }
 
@@ -352,11 +361,10 @@ async function deleteSelectedNode() {
   try {
     await collaborationApi.deleteNode(collabId.value, Number(nodeId))
     removeNodes([nodeId])
-    // Also remove connected edges from UI
     const connEdges = edges.value.filter(e => e.source === nodeId || e.target === nodeId)
     if (connEdges.length) removeEdges(connEdges.map(e => e.id))
     selectedNode.value = null
-    ElMessage.success('节点已删除')
+    ElMessage.success(t('flowEditor.nodeDeleted'))
   } catch (e) { console.error(e) }
 }
 
@@ -367,7 +375,7 @@ async function deleteSelectedEdge() {
     await collaborationApi.deleteEdge(collabId.value, Number(edgeId))
     removeEdges([edgeId])
     selectedEdge.value = null
-    ElMessage.success('连线已删除')
+    ElMessage.success(t('flowEditor.edgeDeleted'))
   } catch (e) { console.error(e) }
 }
 
@@ -382,10 +390,10 @@ async function handleSaveLayout() {
       position_y: n.position.y,
     }))
     await collaborationApi.saveLayout(collabId.value, { nodes: nodePositions })
-    ElMessage.success('布局已保存')
+    ElMessage.success(t('flowEditor.layoutSaved'))
   } catch (e) {
     console.error(e)
-    ElMessage.error('保存布局失败')
+    ElMessage.error(t('flowEditor.layoutSaveFailed'))
   } finally { saving.value = false }
 }
 
@@ -395,7 +403,7 @@ async function handleStart() {
   try {
     await collaborationApi.start(collabId.value)
     flowData.value.status = 'running'
-    ElMessage.success('协作流程已启动')
+    ElMessage.success(t('flowEditor.flowStarted'))
   } catch (e) { console.error(e) }
 }
 
@@ -403,7 +411,7 @@ async function handleStop() {
   try {
     await collaborationApi.stop(collabId.value)
     flowData.value.status = 'inactive'
-    ElMessage.success('协作流程已停止')
+    ElMessage.success(t('flowEditor.flowStopped'))
   } catch (e) { console.error(e) }
 }
 
