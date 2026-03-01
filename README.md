@@ -1,220 +1,220 @@
 <p align="center">
   <h1 align="center">🐾 OpenClawCM</h1>
-  <p align="center"><strong>多实例 AI Agent 统一管控平台</strong></p>
+  <p align="center"><strong>Unified Management Platform for Multi-Instance AI Agents</strong></p>
   <p align="center">
-    <a href="README_EN.md">English</a> · <a href="docs/TECHNICAL.md">技术文档</a> · <a href="docs/TECHNICAL_EN.md">Technical Docs</a>
+    <a href="README_CN.md">中文</a> · <a href="docs/TECHNICAL.md">技术文档</a> · <a href="docs/TECHNICAL_EN.md">Technical Docs</a>
   </p>
 </p>
 
 ---
 
-## 痛点与愿景
+## The Problem & Our Vision
 
-当你的组织同时运行数十个 OpenClaw 实例、上百个 AI Agent 时，你会面对：
+When your organization runs dozens of OpenClaw instances with hundreds of AI Agents, you inevitably face:
 
-- **孤岛式管理** — 每个实例各自为政，缺乏全局视角
-- **协作黑箱** — 多 Agent 协作流程靠 JSON 手写路由规则，出错难排查
-- **输出散落** — 代码、文档、日志分散在各节点，无法统一检索与复用
-- **记忆碎片** — Agent 历史上下文各自独立，跨 Agent 知识无法共享
+- **Siloed Management** — Each instance operates in isolation with no global visibility
+- **Collaboration Black Box** — Multi-agent workflows rely on hand-written JSON routing rules, making debugging painful
+- **Scattered Outputs** — Code, documents, and logs are spread across nodes with no unified retrieval
+- **Fragmented Memory** — Agent context histories are isolated; cross-agent knowledge cannot be shared
 
-**OpenClawCM** 正是为解决这些问题而生。它提供一个 **集中式 Web 管理面板**，让你用一套界面完成实例接入、Agent 编排、协作流程可视化设计、统一输出管理与全文检索，同时内置共享记忆池机制实现跨 Agent 知识复用。
-
----
-
-## 核心能力
-
-| 能力 | 描述 |
-|------|------|
-| **实例管理** | 多 OpenClaw 实例集中注册、分组、健康探测 |
-| **Agent 全生命周期** | 创建 → 配置模型/Prompt → 绑定技能 → 启停控制 |
-| **可视化流程编排** | 基于 Vue Flow 的拖拽式 DAG 编辑器，支持 5 种节点类型 |
-| **共享记忆池** | 跨 Agent 共享上下文，支持读/写/只读权限控制 |
-| **统一输出中心** | 7 种输出类型 + FTS5 全文检索 + 语法高亮 + Markdown 渲染 |
-| **模型供应商管理** | 多 LLM 供应商接入，全局/实例/Agent 三级模型配置 |
-| **审计与安全** | JWT 认证、RBAC 三级角色、全操作审计日志 |
+**OpenClawCM** is purpose-built to solve these challenges. It provides a **centralized web console** where you can onboard instances, orchestrate agents, visually design collaboration workflows, manage outputs with full-text search, and enable cross-agent knowledge reuse through shared memory pools — all from a single interface.
 
 ---
 
-## 系统架构
+## Core Capabilities
+
+| Capability | Description |
+|------------|-------------|
+| **Instance Management** | Centralized registration, grouping, and health probing for multiple OpenClaw instances |
+| **Agent Lifecycle** | Create → Configure model/prompt → Bind skills → Start/Stop control |
+| **Visual Flow Editor** | Drag-and-drop DAG editor powered by Vue Flow with 5 node types |
+| **Shared Memory Pools** | Cross-agent shared context with read/write/readonly permission control |
+| **Unified Output Hub** | 7 output types + FTS5 full-text search + syntax highlighting + Markdown rendering |
+| **Model Provider Management** | Multi-LLM provider support, global/instance/agent-level model configuration |
+| **Audit & Security** | JWT authentication, 3-tier RBAC, automatic audit logging for all write operations |
+
+---
+
+## Architecture
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│                    Nginx (端口 80)                        │
-│         SPA 静态资源  │  /api/ 反向代理                   │
-└──────────┬───────────┴───────────────┬───────────────────┘
+│                    Nginx (Port 80)                        │
+│         SPA Static Assets  │  /api/ Reverse Proxy         │
+└──────────┬─────────────────┴─────────┬───────────────────┘
            │                           │
 ┌──────────▼──────────┐   ┌────────────▼──────────────────┐
 │   Vue 3 Frontend    │   │      FastAPI Backend          │
-│  Element Plus + UI  │   │  SQLAlchemy Async ORM         │
-│  Vue Flow 流程编辑   │   │  JWT Auth + RBAC              │
-│  Pinia 状态管理      │   │  审计中间件                    │
+│  Element Plus UI    │   │  SQLAlchemy Async ORM         │
+│  Vue Flow Editor    │   │  JWT Auth + RBAC              │
+│  Pinia State Mgmt   │   │  Audit Middleware             │
 └─────────────────────┘   └────────────┬──────────────────┘
                                        │
                           ┌────────────▼──────────────────┐
                           │   SQLite (FTS5) / MySQL       │
-                          │   17 张数据表 + 全文索引        │
+                          │   17 Tables + FTS Index        │
                           └───────────────────────────────┘
 ```
 
 ---
 
-## 快速开始
+## Quick Start
 
-### Docker Compose（推荐）
+### Docker Compose (Recommended)
 
 ```bash
 git clone https://github.com/your-org/openclawcm.git
 cd openclawcm
 
-# 按需修改环境变量
+# Adjust environment variables if needed
 # vim docker-compose.yml
 
 docker compose up -d
 ```
 
-启动后访问 **http://localhost** ，默认账号 `admin / admin123`。
+Visit **http://localhost** — default credentials: `admin / admin123`.
 
-### 本地开发
+### Local Development
 
 ```bash
-# 后端
+# Backend
 cd backend
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
-# 前端（新终端）
+# Frontend (new terminal)
 cd frontend
 npm install
 npm run dev
 ```
 
-前端默认 http://localhost:5173 ，后端 API http://localhost:8000 。
+Frontend: http://localhost:5173 — Backend API: http://localhost:8000
 
 ---
 
-## 项目结构
+## Project Structure
 
 ```
 openclawcm/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py              # FastAPI 入口 + 启动事件
-│   │   ├── config.py            # 环境配置 (.env)
-│   │   ├── database.py          # 异步数据库引擎 + FTS5
-│   │   ├── models/              # 15 个 ORM 模型
-│   │   ├── schemas/             # Pydantic 请求/响应模型
-│   │   ├── api/v1/              # 10 个路由模块 (86 端点)
-│   │   ├── middleware/          # 审计日志中间件
-│   │   └── utils/               # 响应封装 + 认证工具
+│   │   ├── main.py              # FastAPI entrypoint + startup events
+│   │   ├── config.py            # Environment config (.env)
+│   │   ├── database.py          # Async DB engine + FTS5 setup
+│   │   ├── models/              # 15 ORM models
+│   │   ├── schemas/             # Pydantic request/response models
+│   │   ├── api/v1/              # 10 router modules (86 endpoints)
+│   │   ├── middleware/          # Audit logging middleware
+│   │   └── utils/               # Response helpers + auth utilities
 │   ├── requirements.txt
 │   └── Dockerfile
 ├── frontend/
 │   ├── src/
-│   │   ├── api/index.js         # Axios API 封装 (76 方法)
-│   │   ├── router/index.js      # 11 个路由
-│   │   ├── views/               # 10 个页面视图
-│   │   ├── layouts/             # 主布局 (侧栏+顶栏)
-│   │   └── stores/              # Pinia 状态
+│   │   ├── api/index.js         # Axios API layer (76 methods)
+│   │   ├── router/index.js      # 11 routes
+│   │   ├── views/               # 10 page views
+│   │   ├── layouts/             # Main layout (sidebar + header)
+│   │   └── stores/              # Pinia state
 │   ├── package.json
 │   └── Dockerfile
 ├── tests/
-│   └── integration_test.sh      # 79 个集成测试
+│   └── integration_test.sh      # 79 integration tests
 ├── docker-compose.yml
 └── nginx.conf
 ```
 
 ---
 
-## 功能模块
+## Feature Modules
 
-### 📊 仪表盘
+### 📊 Dashboard
 
-实例/Agent/输出总量统计卡片、最近输出时间线、异常告警列表。
+Summary cards for instances/agents/outputs, recent output timeline, and alert list.
 
-### 🖥️ 实例管理
+### 🖥️ Instance Management
 
-注册多个 OpenClaw 实例，分组管理，记录 API Key，自动心跳检测。
+Register multiple OpenClaw instances with grouping, API key storage, and automatic heartbeat detection.
 
-### 🤖 Agent 管理
+### 🤖 Agent Management
 
-完整的 Agent 生命周期管理，包括：
-- 基础信息与系统 Prompt 配置
-- 模型绑定（LLM 供应商 → 模型配置 → Agent）
-- Memory 配置（类型/历史消息数/Token 上限/持久化/自动清理）
-- 技能绑定/解绑
-- 一键启动/停止
+Full agent lifecycle management including:
+- Basic info and system prompt configuration
+- Model binding (LLM Provider → Model Config → Agent)
+- Memory configuration (type / history limit / token limit / persistence / auto-cleanup)
+- Skill binding/unbinding
+- One-click start/stop
 
-### 🔗 协作流程编辑器
+### 🔗 Collaboration Flow Editor
 
-拖拽式 DAG 可视化编辑器，支持：
-- **5 种节点**：开始、结束、Agent、条件分支、并行网关
-- 连线与条件路由配置
-- 实时属性编辑面板
-- 布局自动保存（节点坐标 + 视口状态）
-- 保存为模板复用
+Drag-and-drop DAG visual editor supporting:
+- **5 node types**: Start, End, Agent, Condition Branch, Parallel Gateway
+- Edge connections with conditional routing
+- Real-time property editing panel
+- Auto-save layout (node coordinates + viewport state)
+- Save as reusable template
 
-### 📝 输出管理
+### 📝 Output Management
 
-统一收集所有 Agent 的 7 种输出类型（CODE / DOCUMENT / LOG / REPORT / DATA / IMAGE / OTHER）：
-- FTS5 全文检索
-- 代码语法高亮（highlight.js，github-dark 主题）
-- Markdown 实时渲染
-- 收藏、标签、单条/批量导出、批量删除
+Unified collection of 7 output types (CODE / DOCUMENT / LOG / REPORT / DATA / IMAGE / OTHER):
+- FTS5 full-text search
+- Code syntax highlighting (highlight.js, github-dark theme)
+- Live Markdown rendering
+- Favorites, tags, single/batch export, batch delete
 
-### 🧠 共享记忆池
+### 🧠 Shared Memory Pools
 
-创建跨 Agent 的共享记忆空间，支持：
-- 多种记忆类型（buffer / summary / token_buffer）
-- Agent 绑定与权限控制（read / write / readwrite）
-- 关联协作流程
+Create cross-agent shared memory spaces supporting:
+- Multiple memory types (buffer / summary / token_buffer)
+- Agent binding with permission control (read / write / readwrite)
+- Association with collaboration flows
 
-### 🔧 模型管理
+### 🔧 Model Management
 
-两层结构：供应商（OpenAI / Anthropic / 自定义）→ 模型配置（temperature / max_tokens / top_p），支持全局/实例/Agent 三级作用域。
+Two-tier structure: Provider (OpenAI / Anthropic / custom) → Model Config (temperature / max_tokens / top_p), with global/instance/agent scope support.
 
-### 🔐 系统管理
+### 🔐 System Administration
 
-- JWT 身份认证（24h 有效期）
-- RBAC 角色（admin / operator / viewer）
-- 全操作审计日志（自动记录 POST/PUT/DELETE）
-- 用户管理（仅管理员）
-
----
-
-## 技术亮点
-
-- **全异步架构**：FastAPI + SQLAlchemy 2.0 async + aiosqlite，高并发低延迟
-- **SQLite FTS5 全文搜索**：触发器自动同步索引，零额外依赖实现中文搜索
-- **DAG 可视化编排**：Vue Flow 拖拽编辑 + 后端节点/边持久化 + 布局状态保存
-- **统一响应规范**：`{code, message, data}` 标准格式，前后端一致
-- **审计中间件**：零侵入自动记录所有写操作，从 JWT 提取操作人
-- **数据库可迁移**：SQLite 开发 → MySQL 生产，无需改代码
+- JWT authentication (24h expiry)
+- RBAC roles (admin / operator / viewer)
+- Automatic audit logging for all write operations
+- User management (admin only)
 
 ---
 
-## 环境变量
+## Technical Highlights
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `DATABASE_URL` | `sqlite+aiosqlite:///./data/openclawcm.db` | 数据库连接串 |
-| `SECRET_KEY` | `openclawcm-secret-key-change-in-production` | JWT 签名密钥 |
-| `CORS_ORIGINS` | `http://localhost:5173,...` | 允许的跨域来源 |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | `1440` | Token 有效期（分钟） |
+- **Fully Async**: FastAPI + SQLAlchemy 2.0 async + aiosqlite for high concurrency and low latency
+- **SQLite FTS5 Full-Text Search**: Trigger-synced index with zero extra dependencies
+- **DAG Visual Orchestration**: Vue Flow drag-and-drop editor + backend node/edge persistence + layout state saving
+- **Unified Response Format**: `{code, message, data}` standard across frontend and backend
+- **Audit Middleware**: Zero-intrusion automatic logging of all write operations, user extracted from JWT
+- **Database Portable**: SQLite for dev → MySQL for production, no code changes required
 
 ---
 
-## 测试
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | `sqlite+aiosqlite:///./data/openclawcm.db` | Database connection string |
+| `SECRET_KEY` | `openclawcm-secret-key-change-in-production` | JWT signing secret |
+| `CORS_ORIGINS` | `http://localhost:5173,...` | Allowed CORS origins |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `1440` | Token expiry in minutes |
+
+---
+
+## Testing
 
 ```bash
-# 启动后端后运行集成测试
+# Run integration tests after starting the backend
 bash tests/integration_test.sh
 ```
 
-当前测试覆盖 **79 个用例**，涵盖全部 API 端点的正向与异常路径。
+Current test suite covers **79 test cases** across all API endpoints including both positive and error paths.
 
 ---
 
-## 许可证
+## License
 
 [Apache License 2.0](LICENSE)
