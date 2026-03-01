@@ -13,6 +13,7 @@
 | 流程编辑器 | @vue-flow/core + background/controls/minimap | 1.48 |
 | 代码高亮 | highlight.js | 11.11 |
 | Markdown 渲染 | marked | 17.0 |
+| 数据可视化 | ECharts + vue-echarts | 5.6 / 7.0 |
 | 构建工具 | Vite | 6.4 |
 | 后端框架 | FastAPI | 0.128 |
 | ORM | SQLAlchemy 2.0 (async) | 2.0.47 |
@@ -103,6 +104,20 @@ END;
 | `operator` | 实例/Agent/流程等业务操作 |
 | `viewer` | 只读访问 |
 
+### 3.4 路由级鉴权
+
+所有 API 路由（除 auth 路由外）通过 router 级 `dependencies` 统一注入 `require_auth`：
+
+```python
+# router.py
+api_router.include_router(instances.router, prefix="/instances",
+                          dependencies=[Depends(require_auth)])
+# auth 路由不添加 — login 是公开接口
+api_router.include_router(auth.router, prefix="/auth")
+```
+
+未携带有效 Token 的请求将直接返回 `{"detail": "Not authenticated"}`。
+
 ---
 
 ## 4. API 设计
@@ -137,19 +152,19 @@ query = select(Output).options(
 
 手动构建响应字典（`_output_to_dict`），通过 `__dict__` 检查避免触发未加载的关联访问。
 
-### 4.3 路由模块划分（10 个模块，86 端点）
+### 4.3 路由模块划分（10 个模块，89 端点）
 
 | 模块 | 前缀 | 端点数 | 关键特性 |
 |------|------|--------|----------|
 | auth | `/auth` | 7 | JWT 登录、用户 CRUD |
 | instances | `/instances` | 6 | 实例 CRUD + 健康检查 |
 | models | `/models` | 9 | 供应商 + 模型配置 CRUD |
-| agents | `/agents` | 12 | Agent CRUD + 启停 + 技能绑定 |
+| agents | `/agents` | 12 | Agent CRUD + 启停 + 技能绑定 + agent_count同步 |
 | skills | `/skills` | 7 | 技能 CRUD + 安装/卸载 |
 | outputs | `/outputs` | 10 | 输出 CRUD + FTS + 标签 + 批量操作 |
-| collaborations | `/collaborations` | 19 | 流程 + 节点 + 边 + 布局 + 控制 |
+| collaborations | `/collaborations` | 19 | 流程 + 节点 + 边 + 布局 + 控制 + 模板复制 |
 | memory-pools | `/memory-pools` | 8 | 记忆池 CRUD + Agent 绑定 |
-| dashboard | `/dashboard` | 3 | 统计概览 |
+| dashboard | `/dashboard` | 7 | 统计概览 + 趋势 + Agent状态 + 输出类型 + 实例健康 |
 | system | `/system` | 4 | 系统信息 + 审计日志 |
 
 ---
@@ -291,12 +306,20 @@ api.interceptors.response.use(
 ### 8.2 路由守卫
 
 ```javascript
-router.beforeEach((to) => {
-    if (!to.meta?.public && !localStorage.getItem('token')) {
-        return '/login'
-    }
+router.beforeEach((to, from, next) => {
+    const token = localStorage.getItem('token')
+    if (to.meta.public) { next(); return }
+    if (!token) { next('/login'); return }
+    // 基于角色的访问控制
+    if (to.meta.roles) {
+        const user = JSON.parse(localStorage.getItem('user') || '{}')
+        if (user && to.meta.roles.includes(user.role)) next()
+        else { ElMessage.error('权限不足'); next(from.fullPath || '/dashboard') }
+    } else { next() }
 })
 ```
+
+系统设置页面通过 `meta: { roles: ['admin'] }` 限制仅管理员访问。
 
 ### 8.3 状态管理
 
@@ -342,20 +365,22 @@ location /api/ {
 
 ## 10. 测试策略
 
-### 集成测试（79 个用例）
+### 集成测试（85 个用例）
 
 采用 **curl + bash** 端到端测试，覆盖完整业务链路：
 
 ```
-创建实例 → 创建供应商 → 创建模型 → 创建 Agent → 绑定技能
+认证登录 → 未认证访问拒绝验证
+→ 创建实例 → 创建供应商 → 更新供应商 → 创建模型 → 创建 Agent → 绑定技能
 → 创建输出 → FTS 搜索 → 批量操作
-→ 创建协作 → 添加节点/边 → 保存布局 → 启停控制
+→ 创建协作 → 添加节点/边 → 保存布局 → 启停控制 → 保存为模板
 → 创建记忆池 → 绑定 Agent
-→ Dashboard / 系统信息 / 审计日志
+→ Dashboard 概览 / 趋势 / 状态 / 类型分布 / 实例健康
+→ 系统信息 / 审计日志 / 用户管理
 → 清理 + 404 验证
 ```
 
-每个用例检查响应中的关键字段匹配，失败时输出完整响应体辅助排查。
+所有受保护端点的测试均携带 `Authorization: Bearer $TOKEN` 头。每个用例检查响应中的关键字段匹配，失败时输出完整响应体辅助排查。
 
 ---
 
@@ -385,4 +410,6 @@ location /api/ {
 | axios | 1.13.6 |
 | highlight.js | 11.11.1 |
 | marked | 17.0.3 |
+| echarts | 5.6.0 |
+| vue-echarts | 7.0.3 |
 | vite | 6.3.5 |

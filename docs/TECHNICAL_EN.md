@@ -13,6 +13,7 @@
 | Flow Editor | @vue-flow/core + background/controls/minimap | 1.48 |
 | Code Highlighting | highlight.js | 11.11 |
 | Markdown Rendering | marked | 17.0 |
+| Data Visualization | ECharts + vue-echarts | 5.6 / 7.0 |
 | Build Tool | Vite | 6.4 |
 | Backend Framework | FastAPI | 0.128 |
 | ORM | SQLAlchemy 2.0 (async) | 2.0.47 |
@@ -103,6 +104,20 @@ Direct `bcrypt` hashing with cost factor 12 (default), no passlib intermediate l
 | `operator` | Business operations on instances/agents/flows |
 | `viewer` | Read-only access |
 
+### 3.4 Route-Level Authentication
+
+All API routers (except auth) enforce authentication via router-level `dependencies`:
+
+```python
+# router.py
+api_router.include_router(instances.router, prefix="/instances",
+                          dependencies=[Depends(require_auth)])
+# auth router has no dependency — login is a public endpoint
+api_router.include_router(auth.router, prefix="/auth")
+```
+
+Requests without a valid token receive `{"detail": "Not authenticated"}`.
+
 ---
 
 ## 4. API Design
@@ -137,19 +152,19 @@ query = select(Output).options(
 
 Response dictionaries are built manually (`_output_to_dict`) using `__dict__` inspection to avoid triggering unloaded relationship access.
 
-### 4.3 Router Module Breakdown (10 Modules, 86 Endpoints)
+### 4.3 Router Module Breakdown (10 Modules, 89 Endpoints)
 
 | Module | Prefix | Endpoints | Key Features |
 |--------|--------|-----------|-------------|
 | auth | `/auth` | 7 | JWT login, user CRUD |
 | instances | `/instances` | 6 | Instance CRUD + health check |
 | models | `/models` | 9 | Provider + model config CRUD |
-| agents | `/agents` | 12 | Agent CRUD + start/stop + skill binding |
+| agents | `/agents` | 12 | Agent CRUD + start/stop + skill binding + agent_count sync |
 | skills | `/skills` | 7 | Skill CRUD + install/uninstall |
 | outputs | `/outputs` | 10 | Output CRUD + FTS + tags + batch ops |
-| collaborations | `/collaborations` | 19 | Flow + nodes + edges + layout + control |
+| collaborations | `/collaborations` | 19 | Flow + nodes + edges + layout + control + template copy |
 | memory-pools | `/memory-pools` | 8 | Memory pool CRUD + agent binding |
-| dashboard | `/dashboard` | 3 | Statistics overview |
+| dashboard | `/dashboard` | 7 | Statistics overview + trends + agent stats + output types + instance health |
 | system | `/system` | 4 | System info + audit logs |
 
 ---
@@ -291,12 +306,20 @@ api.interceptors.response.use(
 ### 8.2 Route Guard
 
 ```javascript
-router.beforeEach((to) => {
-    if (!to.meta?.public && !localStorage.getItem('token')) {
-        return '/login'
-    }
+router.beforeEach((to, from, next) => {
+    const token = localStorage.getItem('token')
+    if (to.meta.public) { next(); return }
+    if (!token) { next('/login'); return }
+    // Role-based access control
+    if (to.meta.roles) {
+        const user = JSON.parse(localStorage.getItem('user') || '{}')
+        if (user && to.meta.roles.includes(user.role)) next()
+        else { ElMessage.error('Insufficient permissions'); next(from.fullPath || '/dashboard') }
+    } else { next() }
 })
 ```
+
+The Settings page is restricted to admin-only via `meta: { roles: ['admin'] }`.
 
 ### 8.3 State Management
 
@@ -342,20 +365,22 @@ location /api/ {
 
 ## 10. Testing Strategy
 
-### Integration Tests (79 Test Cases)
+### Integration Tests (85 Test Cases)
 
 End-to-end testing using **curl + bash**, covering the full business workflow:
 
 ```
-Create Instance → Create Provider → Create Model → Create Agent → Bind Skills
+Authentication login → Unauthenticated access rejection
+→ Create Instance → Create Provider → Update Provider → Create Model → Create Agent → Bind Skills
 → Create Output → FTS Search → Batch Operations
-→ Create Collaboration → Add Nodes/Edges → Save Layout → Start/Stop Control
+→ Create Collaboration → Add Nodes/Edges → Save Layout → Start/Stop Control → Save as Template
 → Create Memory Pool → Bind Agent
-→ Dashboard / System Info / Audit Logs
+→ Dashboard Overview / Trends / Agent Stats / Output Types / Instance Health
+→ System Info / Audit Logs / User Management
 → Cleanup + 404 Validation
 ```
 
-Each test case verifies key field matches in the response, with full response body output on failure for debugging.
+All protected endpoint tests include `Authorization: Bearer $TOKEN` headers. Each test case verifies key field matches in the response, with full response body output on failure for debugging.
 
 ---
 
@@ -385,4 +410,6 @@ Each test case verifies key field matches in the response, with full response bo
 | axios | 1.13.6 |
 | highlight.js | 11.11.1 |
 | marked | 17.0.3 |
+| echarts | 5.6.0 |
+| vue-echarts | 7.0.3 |
 | vite | 6.3.5 |

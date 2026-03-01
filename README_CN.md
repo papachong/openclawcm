@@ -104,14 +104,14 @@ openclawcm/
 │   │   ├── database.py          # 异步数据库引擎 + FTS5
 │   │   ├── models/              # 15 个 ORM 模型
 │   │   ├── schemas/             # Pydantic 请求/响应模型
-│   │   ├── api/v1/              # 10 个路由模块 (86 端点)
+│   │   ├── api/v1/              # 10 个路由模块 (89 端点)
 │   │   ├── middleware/          # 审计日志中间件
 │   │   └── utils/               # 响应封装 + 认证工具
 │   ├── requirements.txt
 │   └── Dockerfile
 ├── frontend/
 │   ├── src/
-│   │   ├── api/index.js         # Axios API 封装 (76 方法)
+│   │   ├── api/index.js         # Axios API 封装 (90 方法)
 │   │   ├── router/index.js      # 11 个路由
 │   │   ├── views/               # 10 个页面视图
 │   │   ├── layouts/             # 主布局 (侧栏+顶栏)
@@ -119,7 +119,7 @@ openclawcm/
 │   ├── package.json
 │   └── Dockerfile
 ├── tests/
-│   └── integration_test.sh      # 79 个集成测试
+│   └── integration_test.sh      # 85 个集成测试
 ├── docker-compose.yml
 └── nginx.conf
 ```
@@ -130,11 +130,17 @@ openclawcm/
 
 ### 📊 仪表盘
 
-实例/Agent/输出总量统计卡片、最近输出时间线、异常告警列表。
+基于 ECharts 的实时监控可视化：
+- 6 个统计卡片（实例 / Agent / 活跃Agent / 输出 / 协作流程 / 技能）
+- 输出趋势折线图（近7天）
+- Agent 状态分布饼图
+- 输出类型分布柱状图
+- 实例健康状态环形图
+- 最近输出时间线、系统告警列表
 
 ### 🖥️ 实例管理
 
-注册多个 OpenClaw 实例，分组管理，记录 API Key，自动心跳检测。
+注册多个 OpenClaw 实例，分组管理，记录 API Key，自动心跳检测，显示最后心跳时间，30秒自动刷新轮询。
 
 ### 🤖 Agent 管理
 
@@ -176,9 +182,12 @@ openclawcm/
 ### 🔐 系统管理
 
 - JWT 身份认证（24h 有效期）
-- RBAC 角色（admin / operator / viewer）
+- RBAC 角色（admin / operator / viewer），路由级强制鉴权
+- 所有 API 路由通过 `require_auth` 依赖保护（登录接口除外）
+- 前端基于角色的路由守卫（系统设置仅管理员可访问）
 - 全操作审计日志（自动记录 POST/PUT/DELETE）
-- 用户管理（仅管理员）
+- 用户管理：CRUD、启禁用、角色分配（仅管理员）
+- 审计日志查看器：按操作/用户/资源类型筛选，分页展示
 
 ---
 
@@ -187,6 +196,8 @@ openclawcm/
 - **全异步架构**：FastAPI + SQLAlchemy 2.0 async + aiosqlite，高并发低延迟
 - **SQLite FTS5 全文搜索**：触发器自动同步索引，零额外依赖实现中文搜索
 - **DAG 可视化编排**：Vue Flow 拖拽编辑 + 后端节点/边持久化 + 布局状态保存
+- **ECharts 仪表盘**：基于 vue-echarts 的实时可视化，支持 4 种图表类型
+- **路由级 RBAC 鉴权**：所有 API 路由添加 `require_auth` 依赖 + 前端角色守卫
 - **统一响应规范**：`{code, message, data}` 标准格式，前后端一致
 - **审计中间件**：零侵入自动记录所有写操作，从 JWT 提取操作人
 - **数据库可迁移**：SQLite 开发 → MySQL 生产，无需改代码
@@ -211,7 +222,7 @@ openclawcm/
 bash tests/integration_test.sh
 ```
 
-当前测试覆盖 **79 个用例**，涵盖全部 API 端点的正向与异常路径。
+当前测试覆盖 **85 个用例**，涵盖全部 API 端点的正向与异常路径、认证强制与仪表盘分析。
 
 ---
 

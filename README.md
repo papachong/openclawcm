@@ -104,14 +104,14 @@ openclawcm/
 │   │   ├── database.py          # Async DB engine + FTS5 setup
 │   │   ├── models/              # 15 ORM models
 │   │   ├── schemas/             # Pydantic request/response models
-│   │   ├── api/v1/              # 10 router modules (86 endpoints)
+│   │   ├── api/v1/              # 10 router modules (89 endpoints)
 │   │   ├── middleware/          # Audit logging middleware
 │   │   └── utils/               # Response helpers + auth utilities
 │   ├── requirements.txt
 │   └── Dockerfile
 ├── frontend/
 │   ├── src/
-│   │   ├── api/index.js         # Axios API layer (76 methods)
+│   │   ├── api/index.js         # Axios API layer (90 methods)
 │   │   ├── router/index.js      # 11 routes
 │   │   ├── views/               # 10 page views
 │   │   ├── layouts/             # Main layout (sidebar + header)
@@ -119,7 +119,7 @@ openclawcm/
 │   ├── package.json
 │   └── Dockerfile
 ├── tests/
-│   └── integration_test.sh      # 79 integration tests
+│   └── integration_test.sh      # 85 integration tests
 ├── docker-compose.yml
 └── nginx.conf
 ```
@@ -130,11 +130,17 @@ openclawcm/
 
 ### 📊 Dashboard
 
-Summary cards for instances/agents/outputs, recent output timeline, and alert list.
+Real-time monitoring with ECharts visualizations:
+- 6 statistics cards (instances / agents / active agents / outputs / collaborations / skills)
+- Output trends line chart (last 7 days)
+- Agent status distribution pie chart
+- Output type distribution bar chart
+- Instance health ring chart
+- Recent output timeline and system alert list
 
 ### 🖥️ Instance Management
 
-Register multiple OpenClaw instances with grouping, API key storage, and automatic heartbeat detection.
+Register multiple OpenClaw instances with grouping, API key storage, automatic heartbeat detection, last heartbeat timestamp display, and 30-second auto-refresh polling.
 
 ### 🤖 Agent Management
 
@@ -176,9 +182,12 @@ Two-tier structure: Provider (OpenAI / Anthropic / custom) → Model Config (tem
 ### 🔐 System Administration
 
 - JWT authentication (24h expiry)
-- RBAC roles (admin / operator / viewer)
+- RBAC roles (admin / operator / viewer) with route-level enforcement
+- All API routes protected by `require_auth` dependency (except login)
+- Frontend role-based route guards (Settings page admin-only)
 - Automatic audit logging for all write operations
-- User management (admin only)
+- User management: CRUD, enable/disable, role assignment (admin only)
+- Audit log viewer: filterable by action, username, resource type with pagination
 
 ---
 
@@ -187,6 +196,8 @@ Two-tier structure: Provider (OpenAI / Anthropic / custom) → Model Config (tem
 - **Fully Async**: FastAPI + SQLAlchemy 2.0 async + aiosqlite for high concurrency and low latency
 - **SQLite FTS5 Full-Text Search**: Trigger-synced index with zero extra dependencies
 - **DAG Visual Orchestration**: Vue Flow drag-and-drop editor + backend node/edge persistence + layout state saving
+- **ECharts Dashboard**: Real-time visualization with 4 chart types powered by vue-echarts
+- **Route-Level RBAC**: `require_auth` dependency on all API routers + frontend role-based guards
 - **Unified Response Format**: `{code, message, data}` standard across frontend and backend
 - **Audit Middleware**: Zero-intrusion automatic logging of all write operations, user extracted from JWT
 - **Database Portable**: SQLite for dev → MySQL for production, no code changes required
@@ -211,7 +222,7 @@ Two-tier structure: Provider (OpenAI / Anthropic / custom) → Model Config (tem
 bash tests/integration_test.sh
 ```
 
-Current test suite covers **79 test cases** across all API endpoints including both positive and error paths.
+Current test suite covers **85 test cases** across all API endpoints including positive paths, error paths, authentication enforcement, and dashboard analytics.
 
 ---
 
