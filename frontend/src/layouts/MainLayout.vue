@@ -98,6 +98,8 @@ const handleUserCommand = (command) => {
     localStorage.removeItem('user')
     ElMessage.success('已退出登录')
     router.push('/login')
+  } else if (command === 'profile') {
+    router.push('/settings')
   }
 }
 

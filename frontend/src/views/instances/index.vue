@@ -40,6 +40,12 @@
         </el-table-column>
         <el-table-column prop="group_name" label="分组" width="120" />
         <el-table-column prop="agent_count" label="Agent数" width="100" />
+        <el-table-column prop="last_heartbeat" label="最后心跳" width="170">
+          <template #default="{ row }">
+            <span v-if="row.last_heartbeat">{{ row.last_heartbeat }}</span>
+            <span v-else style="color: #909399">暂无</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
         <el-table-column prop="created_at" label="创建时间" width="180" />
         <el-table-column label="操作" width="220" fixed="right">
@@ -97,7 +103,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { instanceApi } from '@/api'
@@ -209,6 +215,15 @@ function resetForm() {
 }
 
 onMounted(() => loadData())
+
+// Auto-refresh every 30 seconds
+let pollTimer = null
+onMounted(() => {
+  pollTimer = setInterval(() => loadData(), 30000)
+})
+onUnmounted(() => {
+  if (pollTimer) clearInterval(pollTimer)
+})
 </script>
 
 <style scoped>

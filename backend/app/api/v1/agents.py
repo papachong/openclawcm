@@ -109,6 +109,14 @@ async def create_agent(data: AgentCreate, db: AsyncSession = Depends(get_db)):
     db.add(agent)
     await db.flush()
     await db.refresh(agent)
+    # Sync instance agent_count
+    if agent.instance_id:
+        inst = await db.get(Instance, agent.instance_id)
+        if inst:
+            cnt_res = await db.execute(
+                select(func.count(Agent.id)).where(Agent.instance_id == agent.instance_id)
+            )
+            inst.agent_count = cnt_res.scalar() or 0
     return success(_agent_to_dict(agent), "创建成功")
 
 
@@ -133,7 +141,17 @@ async def delete_agent(agent_id: int, db: AsyncSession = Depends(get_db)):
     agent = result.scalar_one_or_none()
     if not agent:
         return error("Agent不存在", 404)
+    instance_id = agent.instance_id
     await db.delete(agent)
+    await db.flush()
+    # Sync instance agent_count
+    if instance_id:
+        inst = await db.get(Instance, instance_id)
+        if inst:
+            cnt_res = await db.execute(
+                select(func.count(Agent.id)).where(Agent.instance_id == instance_id)
+            )
+            inst.agent_count = cnt_res.scalar() or 0
     return success(None, "删除成功")
 
 

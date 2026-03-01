@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { ElMessage } from 'element-plus'
 
 const routes = [
   {
@@ -70,7 +71,7 @@ const routes = [
         path: 'settings',
         name: 'Settings',
         component: () => import('@/views/settings/index.vue'),
-        meta: { title: '系统设置', icon: 'Setting' },
+        meta: { title: '系统设置', icon: 'Setting', roles: ['admin'] },
       },
     ],
   },
@@ -84,10 +85,30 @@ const router = createRouter({
 // Navigation guard - require auth for non-public routes
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('token')
-  if (to.meta.public || token) {
+  if (to.meta.public) {
     next()
-  } else {
+    return
+  }
+  if (!token) {
     next('/login')
+    return
+  }
+  // Role-based access control
+  if (to.meta.roles) {
+    try {
+      const userStr = localStorage.getItem('user')
+      const user = userStr ? JSON.parse(userStr) : null
+      if (user && to.meta.roles.includes(user.role)) {
+        next()
+      } else {
+        ElMessage.error('权限不足')
+        next(from.fullPath || '/dashboard')
+      }
+    } catch {
+      next()
+    }
+  } else {
+    next()
   }
 })
 

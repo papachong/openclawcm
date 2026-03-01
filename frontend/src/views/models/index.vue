@@ -114,7 +114,7 @@
     </el-dialog>
 
     <!-- Provider Dialog -->
-    <el-dialog v-model="showProviderDialog" title="新增供应商" width="500px">
+    <el-dialog v-model="showProviderDialog" :title="editingProviderId ? '编辑供应商' : '新增供应商'" width="500px" @close="resetProviderForm">
       <el-form :model="providerForm" label-width="100px">
         <el-form-item label="供应商名称">
           <el-input v-model="providerForm.name" placeholder="如: OpenAI" />
@@ -152,6 +152,7 @@ const submitting = ref(false)
 const showDialog = ref(false)
 const showProviderDialog = ref(false)
 const editingId = ref(null)
+const editingProviderId = ref(null)
 const formRef = ref(null)
 const activeTab = ref('configs')
 const tableData = ref([])
@@ -225,7 +226,16 @@ async function handleDelete(row) {
   loadData()
 }
 
-function handleEditProvider(row) { /* TODO */ }
+function handleEditProvider(row) {
+  editingProviderId.value = row.id
+  Object.assign(providerForm, {
+    name: row.name,
+    api_type: row.api_type || 'openai',
+    base_url: row.base_url || '',
+    api_key: row.api_key || '',
+  })
+  showProviderDialog.value = true
+}
 async function handleDeleteProvider(row) {
   await ElMessageBox.confirm(`确定删除供应商 "${row.name}" 吗？`, '提示', { type: 'warning' })
   await modelApi.deleteProvider(row.id)
@@ -234,10 +244,20 @@ async function handleDeleteProvider(row) {
 }
 
 async function handleSubmitProvider() {
-  await modelApi.createProvider(providerForm)
-  ElMessage.success('供应商添加成功')
+  if (editingProviderId.value) {
+    await modelApi.updateProvider(editingProviderId.value, providerForm)
+    ElMessage.success('供应商更新成功')
+  } else {
+    await modelApi.createProvider(providerForm)
+    ElMessage.success('供应商添加成功')
+  }
   showProviderDialog.value = false
   loadProviders()
+}
+
+function resetProviderForm() {
+  editingProviderId.value = null
+  Object.assign(providerForm, { name: '', api_type: 'openai', base_url: '', api_key: '' })
 }
 
 function resetForm() {

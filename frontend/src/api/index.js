@@ -116,6 +116,10 @@ export const dashboardApi = {
   getOverview: () => request.get('/dashboard/overview'),
   getRecentOutputs: (params) => request.get('/dashboard/recent-outputs', { params }),
   getAlerts: () => request.get('/dashboard/alerts'),
+  getOutputTrends: (params) => request.get('/dashboard/output-trends', { params }),
+  getAgentStats: () => request.get('/dashboard/agent-stats'),
+  getOutputTypeStats: () => request.get('/dashboard/output-type-stats'),
+  getInstanceHealth: () => request.get('/dashboard/instance-health'),
 }
 
 // ==================== 系统设置 ====================
@@ -123,4 +127,15 @@ export const systemApi = {
   getInfo: () => request.get('/system/info'),
   getSettings: () => request.get('/system/settings'),
   updateSettings: (data) => request.put('/system/settings', data),
+  // 审计日志
+  getAuditLogs: (params) => request.get('/system/audit-logs', { params }),
+}
+
+// ==================== 用户管理 ====================
+export const userApi = {
+  list: (params) => request.get('/auth/users', { params }),
+  create: (data) => request.post('/auth/users', data),
+  update: (id, data) => request.put(`/auth/users/${id}`, data),
+  delete: (id) => request.delete(`/auth/users/${id}`),
+  changePassword: (data) => request.put('/auth/password', data),
 }

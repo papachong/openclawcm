@@ -205,7 +205,12 @@ async def stop_collaboration(collab_id: int, db: AsyncSession = Depends(get_db))
 
 @router.post("/{collab_id}/save-template")
 async def save_as_template(collab_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Collaboration).where(Collaboration.id == collab_id))
+    result = await db.execute(
+        select(Collaboration).options(
+            selectinload(Collaboration.nodes),
+            selectinload(Collaboration.edges),
+        ).where(Collaboration.id == collab_id)
+    )
     collab = result.scalar_one_or_none()
     if not collab:
         return error("协作配置不存在", 404)
@@ -221,6 +226,38 @@ async def save_as_template(collab_id: int, db: AsyncSession = Depends(get_db)):
         template_name=f"{collab.name}_模板",
     )
     db.add(template)
+    await db.flush()
+
+    # Copy nodes with old_id -> new_id mapping
+    node_id_map = {}
+    for node in (collab.nodes or []):
+        new_node = CollaborationNode(
+            collaboration_id=template.id,
+            label=node.label,
+            node_type=node.node_type,
+            agent_id=node.agent_id,
+            config_json=node.config_json,
+            position_x=node.position_x,
+            position_y=node.position_y,
+            width=node.width,
+            height=node.height,
+        )
+        db.add(new_node)
+        await db.flush()
+        node_id_map[node.id] = new_node.id
+
+    # Copy edges
+    for edge in (collab.edges or []):
+        new_edge = CollaborationEdge(
+            collaboration_id=template.id,
+            source_node_id=node_id_map.get(edge.source_node_id, edge.source_node_id),
+            target_node_id=node_id_map.get(edge.target_node_id, edge.target_node_id),
+            edge_type=edge.edge_type,
+            condition_json=edge.condition_json,
+            label=edge.label,
+        )
+        db.add(new_edge)
+
     await db.flush()
     await db.refresh(template)
     return success(_collab_to_dict(template), "已保存为模板")
