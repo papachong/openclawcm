@@ -8,6 +8,8 @@ export const instanceApi = {
   update: (id, data) => request.put(`/instances/${id}`, data),
   delete: (id) => request.delete(`/instances/${id}`),
   checkHealth: (id) => request.post(`/instances/${id}/health-check`),
+  syncConfig: (id) => request.post(`/instances/${id}/sync`),
+  syncAll: () => request.post('/instances/sync-all'),
 }
 
 // ==================== 模型管理 ====================

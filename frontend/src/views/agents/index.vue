@@ -2,9 +2,14 @@
   <div class="page-container">
     <div class="page-header">
       <h2>{{ $t('agents.title') }}</h2>
-      <el-button type="primary" @click="openCreateDialog">
-        <el-icon><Plus /></el-icon>{{ $t('agents.addAgent') }}
-      </el-button>
+      <div style="display: flex; gap: 8px;">
+        <el-button type="warning" @click="handleSyncAll" :loading="syncing">
+          <el-icon><Refresh /></el-icon>同步远端配置
+        </el-button>
+        <el-button type="primary" @click="openCreateDialog">
+          <el-icon><Plus /></el-icon>{{ $t('agents.addAgent') }}
+        </el-button>
+      </div>
     </div>
 
     <!-- Filter -->
@@ -193,12 +198,13 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import { Plus, Refresh } from '@element-plus/icons-vue'
 import { agentApi, instanceApi, modelApi, skillApi } from '@/api'
 
 const { t } = useI18n()
 const loading = ref(false)
 const submitting = ref(false)
+const syncing = ref(false)
 const showDialog = ref(false)
 const editingId = ref(null)
 const formRef = ref(null)
@@ -216,7 +222,7 @@ const allSkills = ref([])
 const skillToAdd = ref(null)
 const skillsLoading = ref(false)
 
-const searchForm = reactive({ instance_id: '', name: '', status: '' })
+const searchForm = reactive({ instance_id: null, name: '', status: '' })
 const pagination = reactive({ page: 1, pageSize: 20, total: 0 })
 
 const form = reactive({
@@ -256,7 +262,14 @@ const memoryTypeLabel = (mt) => ({
 async function loadData() {
   loading.value = true
   try {
-    const res = await agentApi.list({ page: pagination.page, page_size: pagination.pageSize, ...searchForm })
+    const params = {
+      page: pagination.page,
+      page_size: pagination.pageSize,
+      ...(searchForm.instance_id ? { instance_id: searchForm.instance_id } : {}),
+      ...(searchForm.name ? { name: searchForm.name } : {}),
+      ...(searchForm.status ? { status: searchForm.status } : {}),
+    }
+    const res = await agentApi.list(params)
     tableData.value = res.data || []
     pagination.total = res.total || 0
   } catch (e) { console.error(e) }
@@ -264,7 +277,7 @@ async function loadData() {
 }
 
 function resetSearch() {
-  Object.assign(searchForm, { instance_id: '', name: '', status: '' })
+  Object.assign(searchForm, { instance_id: null, name: '', status: '' })
   pagination.page = 1
   loadData()
 }
@@ -385,7 +398,27 @@ async function loadRefs() {
   } catch (e) { console.error(e) }
 }
 
-onMounted(() => { loadData(); loadRefs() })
+async function handleSyncAll() {
+  syncing.value = true
+  try {
+    const res = await instanceApi.syncAll()
+    const d = res.data || res
+    ElMessage.success(`同步完成，共 ${d.total || 0} 个实例`)
+    await loadData()
+    await loadRefs()
+  } catch (e) {
+    ElMessage.error(`同步失败: ${e.message || '未知错误'}`)
+  } finally {
+    syncing.value = false
+  }
+}
+
+onMounted(async () => {
+  await loadRefs()
+  // Auto-sync all instances on page load, then reload data
+  instanceApi.syncAll().then(() => { loadData(); loadRefs() }).catch(() => {})
+  loadData()
+})
 </script>
 
 <style scoped>

@@ -2,9 +2,14 @@
   <div class="page-container">
     <div class="page-header">
       <h2>{{ $t('skills.title') }}</h2>
-      <el-button type="primary" @click="showDialog = true">
-        <el-icon><Plus /></el-icon>{{ $t('skills.addSkill') }}
-      </el-button>
+      <div style="display: flex; gap: 8px;">
+        <el-button type="warning" @click="handleSyncAll" :loading="syncing">
+          <el-icon><Refresh /></el-icon>同步远端配置
+        </el-button>
+        <el-button type="primary" @click="showDialog = true">
+          <el-icon><Plus /></el-icon>{{ $t('skills.addSkill') }}
+        </el-button>
+      </div>
     </div>
 
     <el-card class="search-card">
@@ -75,12 +80,13 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
-import { skillApi } from '@/api'
+import { Plus, Refresh } from '@element-plus/icons-vue'
+import { skillApi, instanceApi } from '@/api'
 
 const { t } = useI18n()
 const loading = ref(false)
 const submitting = ref(false)
+const syncing = ref(false)
 const showDialog = ref(false)
 const editingId = ref(null)
 const formRef = ref(null)
@@ -132,7 +138,25 @@ async function handleDelete(skill) {
 }
 function resetForm() { editingId.value = null; Object.assign(form, { name: '', version: '1.0.0', description: '', config_json: '' }) }
 
-onMounted(() => loadData())
+async function handleSyncAll() {
+  syncing.value = true
+  try {
+    const res = await instanceApi.syncAll()
+    const d = res.data || res
+    ElMessage.success(`同步完成，共 ${d.total || 0} 个实例`)
+    await loadData()
+  } catch (e) {
+    ElMessage.error(`同步失败: ${e.message || '未知错误'}`)
+  } finally {
+    syncing.value = false
+  }
+}
+
+onMounted(() => {
+  loadData()
+  // Auto-sync on page load
+  instanceApi.syncAll().then(() => loadData()).catch(() => {})
+})
 </script>
 
 <style scoped>

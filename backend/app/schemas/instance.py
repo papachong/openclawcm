@@ -2,14 +2,14 @@
 Instance schemas.
 """
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
 
 
 class InstanceCreate(BaseModel):
     name: str
     url: str
-    api_key: Optional[str] = None
+    api_key: str = Field(..., min_length=1)
     group_name: Optional[str] = None
     description: Optional[str] = None
 

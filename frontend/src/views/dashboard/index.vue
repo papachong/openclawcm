@@ -93,7 +93,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { dashboardApi } from '@/api'
+import { dashboardApi, instanceApi } from '@/api'
 import { Monitor, Cpu, UserFilled, Document, Connection, MagicStick } from '@element-plus/icons-vue'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -171,6 +171,9 @@ const statusColors = { running: '#67C23A', stopped: '#909399', error: '#F56C6C',
 const instanceColors = { online: '#67C23A', offline: '#F56C6C', unknown: '#909399' }
 
 onMounted(async () => {
+  // Auto-sync all instances first, then load dashboard data
+  try { await instanceApi.syncAll() } catch (_) {}
+
   const [overviewRes, trendsRes, agentRes, outputTypeRes, instanceRes, recentRes, alertsRes] = await Promise.allSettled([
     dashboardApi.getOverview(),
     dashboardApi.getOutputTrends({ days: 7 }),

@@ -2,9 +2,14 @@
   <div class="page-container">
     <div class="page-header">
       <h2>{{ $t('instances.title') }}</h2>
-      <el-button type="primary" @click="showDialog = true">
-        <el-icon><Plus /></el-icon>{{ $t('instances.addInstance') }}
-      </el-button>
+      <div style="display: flex; gap: 8px;">
+        <el-button type="warning" @click="handleSyncAll" :loading="syncing">
+          <el-icon><Refresh /></el-icon>同步所有实例配置
+        </el-button>
+        <el-button type="primary" @click="showDialog = true">
+          <el-icon><Plus /></el-icon>{{ $t('instances.addInstance') }}
+        </el-button>
+      </div>
     </div>
 
     <!-- Search Bar -->
@@ -48,9 +53,10 @@
         </el-table-column>
         <el-table-column prop="description" :label="$t('common.description')" min-width="200" show-overflow-tooltip />
         <el-table-column prop="created_at" :label="$t('common.createdAt')" width="180" />
-        <el-table-column :label="$t('common.operation')" width="220" fixed="right">
+        <el-table-column :label="$t('common.operation')" width="300" fixed="right">
           <template #default="{ row }">
             <el-button size="small" @click="handleEdit(row)">{{ $t('common.edit') }}</el-button>
+            <el-button size="small" type="warning" @click="handleSyncOne(row)" :loading="row._syncing">同步配置</el-button>
             <el-button size="small" type="success" @click="handleHealthCheck(row)">{{ $t('instances.healthCheck') }}</el-button>
             <el-button size="small" type="danger" @click="handleDelete(row)">{{ $t('common.delete') }}</el-button>
           </template>
@@ -85,7 +91,7 @@
           <el-input v-model="form.url" placeholder="http://localhost:8080" />
         </el-form-item>
         <el-form-item label="API Key" prop="api_key">
-          <el-input v-model="form.api_key" :placeholder="$t('instances.optional')" show-password />
+          <el-input v-model="form.api_key" placeholder="请输入实例 API Key" show-password />
         </el-form-item>
         <el-form-item :label="$t('instances.group')" prop="group_name">
           <el-input v-model="form.group_name" :placeholder="$t('instances.groupPlaceholder')" />
@@ -106,12 +112,13 @@
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import { Plus, Refresh } from '@element-plus/icons-vue'
 import { instanceApi } from '@/api'
 
 const { t } = useI18n()
 const loading = ref(false)
 const submitting = ref(false)
+const syncing = ref(false)
 const showDialog = ref(false)
 const editingId = ref(null)
 const formRef = ref(null)
@@ -131,6 +138,7 @@ const form = reactive({
 const rules = computed(() => ({
   name: [{ required: true, message: t('instances.pleaseInputName'), trigger: 'blur' }],
   url: [{ required: true, message: t('instances.pleaseInputUrl'), trigger: 'blur' }],
+  api_key: [{ required: true, message: '请输入API Key', trigger: 'blur' }],
 }))
 
 async function loadData() {
@@ -210,13 +218,49 @@ async function handleHealthCheck(row) {
   }
 }
 
+async function handleSyncOne(row) {
+  row._syncing = true
+  try {
+    const res = await instanceApi.syncConfig(row.id)
+    const d = res.data || res
+    const parts = []
+    if (d.synced_agents) parts.push(`Agent: ${d.synced_agents}`)
+    if (d.synced_models) parts.push(`模型: ${d.synced_models}`)
+    if (d.synced_plugins) parts.push(`插件: ${d.synced_plugins}`)
+    ElMessage.success(`同步完成${parts.length ? ' (' + parts.join(', ') + ')' : ''}`)
+    loadData()
+  } catch (e) {
+    ElMessage.error(`同步失败: ${e.message || '未知错误'}`)
+  } finally {
+    row._syncing = false
+  }
+}
+
+async function handleSyncAll() {
+  syncing.value = true
+  try {
+    const res = await instanceApi.syncAll()
+    const d = res.data || res
+    ElMessage.success(`批量同步完成，共 ${d.total || 0} 个实例`)
+    loadData()
+  } catch (e) {
+    ElMessage.error(`批量同步失败: ${e.message || '未知错误'}`)
+  } finally {
+    syncing.value = false
+  }
+}
+
 function resetForm() {
   editingId.value = null
   Object.assign(form, { name: '', url: '', api_key: '', group_name: '', description: '' })
   formRef.value?.resetFields()
 }
 
-onMounted(() => loadData())
+onMounted(() => {
+  loadData()
+  // Auto-sync all instances on page load
+  instanceApi.syncAll().then(() => loadData()).catch(() => {})
+})
 
 let pollTimer = null
 onMounted(() => {

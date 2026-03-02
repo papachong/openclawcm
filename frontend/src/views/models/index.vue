@@ -3,6 +3,9 @@
     <div class="page-header">
       <h2>{{ $t('models.title') }}</h2>
       <div>
+        <el-button type="warning" @click="handleSyncAll" :loading="syncing">
+          <el-icon><Refresh /></el-icon>同步远端配置
+        </el-button>
         <el-button @click="activeTab = 'providers'">{{ $t('models.providerManage') }}</el-button>
         <el-button type="primary" @click="showDialog = true">
           <el-icon><Plus /></el-icon>{{ $t('models.addModelConfig') }}
@@ -145,12 +148,13 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
-import { modelApi } from '@/api'
+import { Plus, Refresh } from '@element-plus/icons-vue'
+import { modelApi, instanceApi } from '@/api'
 
 const { t } = useI18n()
 const loading = ref(false)
 const submitting = ref(false)
+const syncing = ref(false)
 const showDialog = ref(false)
 const showProviderDialog = ref(false)
 const editingId = ref(null)
@@ -267,7 +271,27 @@ function resetForm() {
   Object.assign(form, { name: '', provider_id: null, model_name: '', scope: 'global', temperature: 0.7, max_tokens: 4096, description: '' })
 }
 
-onMounted(() => { loadData(); loadProviders() })
+async function handleSyncAll() {
+  syncing.value = true
+  try {
+    const res = await instanceApi.syncAll()
+    const d = res.data || res
+    ElMessage.success(`同步完成，共 ${d.total || 0} 个实例`)
+    await loadData()
+    await loadProviders()
+  } catch (e) {
+    ElMessage.error(`同步失败: ${e.message || '未知错误'}`)
+  } finally {
+    syncing.value = false
+  }
+}
+
+onMounted(() => {
+  loadData()
+  loadProviders()
+  // Auto-sync on page load
+  instanceApi.syncAll().then(() => { loadData(); loadProviders() }).catch(() => {})
+})
 </script>
 
 <style scoped>

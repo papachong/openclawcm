@@ -16,9 +16,21 @@ from app.schemas.agent import (
     AgentCreate, AgentUpdate, AgentOut,
     AgentSkillBind, AgentSkillOut,
 )
+from app.services.openclaw_gateway import list_remote_agents
 from app.utils.response import success, error, page_response
 
 router = APIRouter()
+
+
+async def _ensure_instance_api_key(db: AsyncSession, instance_id: Optional[int]):
+    if not instance_id:
+        return None, error("请选择实例", 400)
+    instance = await db.get(Instance, instance_id)
+    if not instance:
+        return None, error("实例不存在", 404)
+    if not instance.api_key:
+        return None, error("实例未配置API Key，无法管理OpenClaw Agent", 400)
+    return instance, None
 
 
 def _agent_to_dict(item) -> dict:
@@ -58,8 +70,39 @@ async def list_agents(
     instance_id: Optional[int] = None,
     name: Optional[str] = None,
     status: Optional[str] = None,
+    sync_remote: bool = Query(True),
     db: AsyncSession = Depends(get_db),
 ):
+    if instance_id and sync_remote:
+        instance = await db.get(Instance, instance_id)
+        if instance and instance.api_key:
+            try:
+                remote_agents = await list_remote_agents(instance.url, instance.api_key)
+                for remote in remote_agents:
+                    rname = remote.get("name")
+                    if not rname:
+                        continue
+                    existing_res = await db.execute(
+                        select(Agent).where(Agent.instance_id == instance_id, Agent.name == rname)
+                    )
+                    existing = existing_res.scalar_one_or_none()
+                    if existing:
+                        if remote.get("role"):
+                            existing.role = remote.get("role")
+                        if remote.get("description"):
+                            existing.description = remote.get("description")
+                    else:
+                        db.add(Agent(
+                            name=rname,
+                            instance_id=instance_id,
+                            role=remote.get("role"),
+                            description=remote.get("description"),
+                            status="stopped",
+                        ))
+                await db.flush()
+            except Exception as exc:
+                return error(f"远端Agent同步失败: {str(exc)}", 400)
+
     query = select(Agent).options(
         selectinload(Agent.instance),
         selectinload(Agent.model_config),
@@ -105,6 +148,9 @@ async def get_agent(agent_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.post("")
 async def create_agent(data: AgentCreate, db: AsyncSession = Depends(get_db)):
+    _, err = await _ensure_instance_api_key(db, data.instance_id)
+    if err:
+        return err
     agent = Agent(**data.model_dump())
     db.add(agent)
     await db.flush()
@@ -126,6 +172,11 @@ async def update_agent(agent_id: int, data: AgentUpdate, db: AsyncSession = Depe
     agent = result.scalar_one_or_none()
     if not agent:
         return error("Agent不存在", 404)
+
+    target_instance_id = data.instance_id if data.instance_id is not None else agent.instance_id
+    _, err = await _ensure_instance_api_key(db, target_instance_id)
+    if err:
+        return err
 
     for key, value in data.model_dump(exclude_unset=True).items():
         setattr(agent, key, value)
@@ -161,6 +212,9 @@ async def start_agent(agent_id: int, db: AsyncSession = Depends(get_db)):
     agent = result.scalar_one_or_none()
     if not agent:
         return error("Agent不存在", 404)
+    _, err = await _ensure_instance_api_key(db, agent.instance_id)
+    if err:
+        return err
     agent.status = "running"
     await db.flush()
     return success({"id": agent_id, "status": "running"}, "启动成功")
@@ -172,6 +226,9 @@ async def stop_agent(agent_id: int, db: AsyncSession = Depends(get_db)):
     agent = result.scalar_one_or_none()
     if not agent:
         return error("Agent不存在", 404)
+    _, err = await _ensure_instance_api_key(db, agent.instance_id)
+    if err:
+        return err
     agent.status = "stopped"
     await db.flush()
     return success({"id": agent_id, "status": "stopped"}, "已停止")
@@ -183,6 +240,9 @@ async def restart_agent(agent_id: int, db: AsyncSession = Depends(get_db)):
     agent = result.scalar_one_or_none()
     if not agent:
         return error("Agent不存在", 404)
+    _, err = await _ensure_instance_api_key(db, agent.instance_id)
+    if err:
+        return err
     agent.status = "running"
     await db.flush()
     return success({"id": agent_id, "status": "running"}, "重启成功")
