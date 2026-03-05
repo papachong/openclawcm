@@ -323,6 +323,15 @@ export default {
     messageCount: 'Messages:',
     tokenCount: 'Tokens:',
     agentBinding: 'Agent Binding',
+    // Search & Filter
+    instance: 'Instance',
+    allInstances: 'All Instances',
+    agent: 'Agent',
+    allAgents: 'All Agents',
+    collaboration: 'Workflow',
+    allCollaborations: 'All Workflows',
+    keyword: 'Keyword',
+    searchPlaceholder: 'Search pool name...',
     // Form
     poolNamePlaceholder: 'Pool name',
     memoryBuffer: 'Buffer Memory',

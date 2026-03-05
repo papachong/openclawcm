@@ -7,6 +7,34 @@
       </el-button>
     </div>
 
+    <!-- Search & Filter -->
+    <el-card class="search-card">
+      <el-form :inline="true" :model="searchForm">
+        <el-form-item :label="$t('memoryPools.instance')">
+          <el-select v-model="searchForm.instance_id" :placeholder="$t('memoryPools.allInstances')" clearable>
+            <el-option v-for="inst in instances" :key="inst.id" :label="inst.name" :value="inst.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="$t('memoryPools.agent')">
+          <el-select v-model="searchForm.agent_id" :placeholder="$t('memoryPools.allAgents')" clearable filterable>
+            <el-option v-for="a in filteredAgents" :key="a.id" :label="`${a.name} (${a.instance_name || ''})`" :value="a.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="$t('memoryPools.collaboration')">
+          <el-select v-model="searchForm.collaboration_id" :placeholder="$t('memoryPools.allCollaborations')" clearable>
+            <el-option v-for="c in collaborations" :key="c.id" :label="c.name" :value="c.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="$t('memoryPools.keyword')">
+          <el-input v-model="searchForm.keyword" :placeholder="$t('memoryPools.searchPlaceholder')" clearable style="width: 200px" />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="loadData">{{ $t('common.search') }}</el-button>
+          <el-button @click="resetSearch">{{ $t('common.reset') }}</el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
+
     <!-- Pool List -->
     <el-card>
       <el-table :data="tableData" v-loading="loading" stripe>
@@ -133,7 +161,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
-import { memoryPoolApi, agentApi, collaborationApi } from '@/api'
+import { memoryPoolApi, agentApi, collaborationApi, instanceApi } from '@/api'
 
 const { t } = useI18n()
 const loading = ref(false)
@@ -143,14 +171,23 @@ const editingId = ref(null)
 const formRef = ref(null)
 const tableData = ref([])
 const collaborations = ref([])
+const instances = ref([])
+const allAgents = ref([])
 const pagination = reactive({ page: 1, pageSize: 20, total: 0 })
+
+// Search form
+const searchForm = reactive({
+  instance_id: '',
+  agent_id: '',
+  collaboration_id: '',
+  keyword: '',
+})
 
 // Agent binding state
 const showAgentsDialog = ref(false)
 const currentPoolId = ref(null)
 const currentPoolName = ref('')
 const poolAgents = ref([])
-const allAgents = ref([])
 const agentToAdd = ref(null)
 const permissionToAdd = ref('readwrite')
 const agentsLoading = ref(false)
@@ -170,6 +207,12 @@ const memoryTypeLabel = (mt) => ({
   buffer_summary: t('memoryPools.memoryMixedShort'),
 }[mt] || mt)
 
+// Filter agents by selected instance
+const filteredAgents = computed(() => {
+  if (!searchForm.instance_id) return allAgents.value
+  return allAgents.value.filter(a => a.instance_id === searchForm.instance_id)
+})
+
 const availableAgents = computed(() => {
   const boundIds = new Set(poolAgents.value.map(a => a.agent_id))
   return allAgents.value.filter(a => !boundIds.has(a.id))
@@ -178,11 +221,24 @@ const availableAgents = computed(() => {
 async function loadData() {
   loading.value = true
   try {
-    const res = await memoryPoolApi.list({ page: pagination.page, page_size: pagination.pageSize })
+    // Build params, filtering out empty values
+    const params = { page: pagination.page, page_size: pagination.pageSize }
+    if (searchForm.instance_id) params.instance_id = searchForm.instance_id
+    if (searchForm.agent_id) params.agent_id = searchForm.agent_id
+    if (searchForm.collaboration_id) params.collaboration_id = searchForm.collaboration_id
+    if (searchForm.keyword) params.keyword = searchForm.keyword
+
+    const res = await memoryPoolApi.list(params)
     tableData.value = res.data || []
     pagination.total = res.total || 0
   } catch (e) { console.error(e) }
   finally { loading.value = false }
+}
+
+function resetSearch() {
+  Object.assign(searchForm, { instance_id: '', agent_id: '', collaboration_id: '', keyword: '' })
+  pagination.page = 1
+  loadData()
 }
 
 function openCreateDialog() {
@@ -247,7 +303,7 @@ async function loadPoolAgents() {
   agentsLoading.value = true
   try {
     const res = await memoryPoolApi.listAgents(currentPoolId.value)
-    poolAgents.value = res || []
+    poolAgents.value = res.data || res || []
   } catch (e) { console.error(e) }
   finally { agentsLoading.value = false }
 }
@@ -275,9 +331,14 @@ async function handleUnbindAgent(row) {
 
 async function loadRefs() {
   try {
-    const [agentRes, collabRes] = await Promise.all([agentApi.list(), collaborationApi.list()])
+    const [agentRes, collabRes, instRes] = await Promise.all([
+      agentApi.list(),
+      collaborationApi.list(),
+      instanceApi.list()
+    ])
     allAgents.value = agentRes.data || []
     collaborations.value = collabRes.data || []
+    instances.value = instRes.data || []
   } catch (e) { console.error(e) }
 }
 
@@ -288,5 +349,6 @@ onMounted(() => { loadData(); loadRefs() })
 .page-container { display: flex; flex-direction: column; gap: 16px; }
 .page-header { display: flex; justify-content: space-between; align-items: center; }
 .page-header h2 { margin: 0; color: #303133; }
+.search-card { margin-bottom: 0; }
 .pagination-wrapper { display: flex; justify-content: flex-end; margin-top: 16px; }
 </style>

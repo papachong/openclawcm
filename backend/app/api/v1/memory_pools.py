@@ -3,7 +3,7 @@ Shared memory pool management API endpoints.
 """
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, distinct
 from sqlalchemy.orm import selectinload
 from typing import Optional
 
@@ -21,6 +21,18 @@ router = APIRouter()
 def _pool_to_dict(item) -> dict:
     loaded = item.__dict__
     bindings = loaded.get('agent_bindings')
+    # Extract agent info from bindings
+    bound_agents = []
+    if bindings:
+        for b in bindings:
+            if b.agent:
+                bound_agents.append({
+                    "id": b.agent_id,
+                    "name": b.agent.name if b.agent else None,
+                    "instance_id": b.agent.instance_id if b.agent else None,
+                    "instance_name": b.agent.instance.name if b.agent and b.agent.instance else None,
+                    "permission": b.permission,
+                })
     return {
         "id": item.id,
         "name": item.name,
@@ -33,6 +45,7 @@ def _pool_to_dict(item) -> dict:
         "message_count": item.message_count or 0,
         "total_tokens": item.total_tokens or 0,
         "agent_count": len(bindings) if bindings else 0,
+        "bound_agents": bound_agents,
         "created_at": item.created_at.isoformat() if item.created_at else None,
     }
 
@@ -41,15 +54,51 @@ def _pool_to_dict(item) -> dict:
 async def list_memory_pools(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    status: Optional[str] = None,
+    status: Optional[str] = Query(default=None),
+    agent_id: Optional[int] = Query(default=None),
+    instance_id: Optional[int] = Query(default=None),
+    collaboration_id: Optional[int] = Query(default=None),
+    keyword: Optional[str] = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(SharedMemoryPool).options(selectinload(SharedMemoryPool.agent_bindings))
-    count_query = select(func.count(SharedMemoryPool.id))
+    # Base query with eager loading of bindings -> agent -> instance
+    query = select(SharedMemoryPool).options(
+        selectinload(SharedMemoryPool.agent_bindings)
+        .selectinload(AgentMemoryPoolBinding.agent)
+        .selectinload(Agent.instance)
+    )
+    count_query = select(func.count(distinct(SharedMemoryPool.id)))
 
+    # Apply filters
     if status:
         query = query.where(SharedMemoryPool.status == status)
         count_query = count_query.where(SharedMemoryPool.status == status)
+
+    if collaboration_id:
+        query = query.where(SharedMemoryPool.collaboration_id == collaboration_id)
+        count_query = count_query.where(SharedMemoryPool.collaboration_id == collaboration_id)
+
+    if keyword:
+        query = query.where(SharedMemoryPool.name.contains(keyword))
+        count_query = count_query.where(SharedMemoryPool.name.contains(keyword))
+
+    # Filter by agent_id - need subquery
+    if agent_id:
+        subquery = select(AgentMemoryPoolBinding.pool_id).where(
+            AgentMemoryPoolBinding.agent_id == agent_id
+        )
+        query = query.where(SharedMemoryPool.id.in_(subquery))
+        count_query = count_query.where(SharedMemoryPool.id.in_(subquery))
+
+    # Filter by instance_id - need to join through agent_bindings -> agent
+    if instance_id:
+        # Get all agent_ids belonging to this instance
+        agent_subquery = select(Agent.id).where(Agent.instance_id == instance_id)
+        binding_subquery = select(AgentMemoryPoolBinding.pool_id).where(
+            AgentMemoryPoolBinding.agent_id.in_(agent_subquery)
+        )
+        query = query.where(SharedMemoryPool.id.in_(binding_subquery))
+        count_query = count_query.where(SharedMemoryPool.id.in_(binding_subquery))
 
     total_result = await db.execute(count_query)
     total = total_result.scalar() or 0

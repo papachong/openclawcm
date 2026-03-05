@@ -110,17 +110,24 @@ async def search_outputs(
     return page_response(data, total, page, page_size)
 
 
+def _clean_param(value, default=None):
+    """Clean parameter - convert empty strings to None."""
+    if value == "" or value is None:
+        return default
+    return value
+
+
 @router.get("")
 async def list_outputs(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    instance_id: Optional[int] = None,
-    agent_id: Optional[int] = None,
-    output_type: Optional[str] = None,
-    keyword: Optional[str] = None,
-    status: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    instance_id: Optional[int] = Query(default=None),
+    agent_id: Optional[int] = Query(default=None),
+    output_type: Optional[str] = Query(default=None),
+    keyword: Optional[str] = Query(default=None),
+    status: Optional[str] = Query(default=None),
+    start_date: Optional[str] = Query(default=None),
+    end_date: Optional[str] = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
     query = select(Output).options(

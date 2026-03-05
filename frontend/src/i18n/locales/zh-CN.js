@@ -323,6 +323,15 @@ export default {
     messageCount: '消息:',
     tokenCount: 'Token:',
     agentBinding: 'Agent绑定',
+    // Search & Filter
+    instance: '实例',
+    allInstances: '全部实例',
+    agent: 'Agent',
+    allAgents: '全部Agent',
+    collaboration: '协作流程',
+    allCollaborations: '全部协作',
+    keyword: '关键词',
+    searchPlaceholder: '搜索记忆池名称',
     // Form
     poolNamePlaceholder: '记忆池名称',
     memoryBuffer: '缓冲记忆(Buffer)',
