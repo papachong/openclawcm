@@ -163,7 +163,7 @@ Response dictionaries are built manually (`_output_to_dict`) using `__dict__` in
 | skills | `/skills` | 7 | Skill CRUD + install/uninstall |
 | outputs | `/outputs` | 10 | Output CRUD + FTS + tags + batch ops |
 | collaborations | `/collaborations` | 19 | Flow + nodes + edges + layout + control + template copy |
-| memory-pools | `/memory-pools` | 8 | Memory pool CRUD + agent binding |
+| memory-pools | `/memory-pools` | 8 | Memory pool CRUD + agent binding + multi-dimensional filtering (instance/agent/collaboration/keyword) |
 | dashboard | `/dashboard` | 7 | Statistics overview + trends + agent stats + output types + instance health |
 | system | `/system` | 4 | System info + audit logs |
 
@@ -413,3 +413,133 @@ All protected endpoint tests include `Authorization: Bearer $TOKEN` headers. Eac
 | echarts | 5.6.0 |
 | vue-echarts | 7.0.3 |
 | vite | 6.3.5 |
+
+---
+
+## 11. OpenClaw Gateway Service
+
+OpenClawCM communicates with OpenClaw instances via WebSocket for configuration sync and remote control.
+
+### 11.1 Gateway Communication Protocol
+
+```python
+# services/openclaw_gateway.py
+async def _gateway_call(instance_url: str, token: str, method: str, params: dict) -> Any:
+    ws_url = _to_ws_url(instance_url)  # http:// → ws://
+    async with websockets.connect(ws_url, origin=origin) as ws:
+        # 1. Send connect request
+        connect_req = {
+            "type": "req", "id": uuid, "method": "connect",
+            "params": {
+                "minProtocol": 3, "maxProtocol": 3,
+                "client": {"id": "gateway-client", "version": "openclawcm"},
+                "role": "operator",
+                "scopes": ["operator.read", "operator.admin", "operator.approvals", "operator.pairing"],
+                "auth": {"token": token},
+            }
+        }
+        # 2. Wait for connect response
+        # 3. Send business request (agents.list, config.get, skills.status, etc.)
+        # 4. Return response payload
+```
+
+### 11.2 Supported Gateway APIs
+
+| API Method | Function | Return Data |
+|------------|----------|-------------|
+| `agents.list` | Get agent list | `[{name, role, slug, version, permission}]` |
+| `config.get` | Get full configuration | `{models, plugins, gateway, ...}` |
+| `skills.status` | Get skill status | `{skills: [{name, description, eligible, ...}]}` |
+| `sessions.list` | Get session list | `{sessions: [...]}` |
+
+### 11.3 Instance Configuration Sync
+
+The `sync_instance_config()` function implements full instance synchronization:
+
+```python
+async def sync_instance_config(instance_url: str, token: str) -> Dict:
+    return {
+        "agents": _normalize_agents(await _gateway_call(..., "agents.list", {})),
+        "models": _normalize_models(config),      # Extracted from config.get
+        "skills": _normalize_skills(await _gateway_call(..., "skills.status", {})),
+        "raw_config": actual_config,
+        "gateway_version": gw.get("version"),
+        "errors": [],  # Collect API call errors
+    }
+```
+
+**Data Normalization**: Different OpenClaw versions may return different formats. `_normalize_*` functions handle unified processing:
+- `_normalize_agents`: Handles `agents` / `id` / `agentId` field variants
+- `_normalize_models`: Parses OpenClaw's `providers.{key}.models[]` structure
+- `_normalize_skills`: Extracts skill details from `skills.status`
+
+### 11.4 Collaboration Flow Execution
+
+Collaboration flows support remote execution control:
+
+```python
+# POST /collaborations/{id}/execute
+{
+    "status": "running",      # pending → running → completed/failed
+    "started_at": "2025-03-05T10:00:00Z",
+    "current_node_id": 5,     # Current execution node
+    "execution_log": [...]    # Execution log
+}
+```
+
+Execution flow sends messages to agents via `send_agent_message()`:
+
+```python
+async def send_agent_message(instance_url: str, token: str,
+                             message: str, session_key: str = None) -> Dict:
+    params = {"message": message}
+    if session_key:
+        params["sessionKey"] = session_key
+    return await _gateway_call(instance_url, token, "agent", params)
+```
+
+---
+
+## 12. Memory Pool Multi-Dimensional Filtering
+
+Memory pools support filtering by instance, agent, collaboration flow, and keyword:
+
+### 12.1 Backend API
+
+```python
+@router.get("")
+async def list_memory_pools(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    status: Optional[str] = Query(default=None),
+    agent_id: Optional[int] = Query(default=None),      # Filter by Agent
+    instance_id: Optional[int] = Query(default=None),   # Filter by instance
+    collaboration_id: Optional[int] = Query(default=None),  # Filter by collaboration
+    keyword: Optional[str] = Query(default=None),       # Keyword search
+    db: AsyncSession = Depends(get_db),
+):
+```
+
+### 12.2 Join Queries
+
+```python
+# Filter by instance_id via Agent association
+if instance_id:
+    query = query.join(AgentMemoryPoolBinding).join(Agent).filter(
+        Agent.instance_id == instance_id
+    )
+
+# Filter by collaboration_id directly
+if collaboration_id:
+    query = query.filter(SharedMemoryPool.collaboration_id == collaboration_id)
+```
+
+### 12.3 Frontend Cascading Filter
+
+```javascript
+// When instance is selected, Agent dropdown auto-filters
+const filteredAgents = computed(() => {
+    if (!searchForm.instance_id) return allAgents.value
+    return allAgents.value.filter(a => a.instance_id === searchForm.instance_id)
+})
+```

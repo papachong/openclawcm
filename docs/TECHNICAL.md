@@ -163,7 +163,7 @@ query = select(Output).options(
 | skills | `/skills` | 7 | 技能 CRUD + 安装/卸载 |
 | outputs | `/outputs` | 10 | 输出 CRUD + FTS + 标签 + 批量操作 |
 | collaborations | `/collaborations` | 19 | 流程 + 节点 + 边 + 布局 + 控制 + 模板复制 |
-| memory-pools | `/memory-pools` | 8 | 记忆池 CRUD + Agent 绑定 |
+| memory-pools | `/memory-pools` | 8 | 记忆池 CRUD + Agent 绑定 + 多维度过滤（实例/Agent/协作流程/关键词） |
 | dashboard | `/dashboard` | 7 | 统计概览 + 趋势 + Agent状态 + 输出类型 + 实例健康 |
 | system | `/system` | 4 | 系统信息 + 审计日志 |
 
@@ -413,3 +413,133 @@ location /api/ {
 | echarts | 5.6.0 |
 | vue-echarts | 7.0.3 |
 | vite | 6.3.5 |
+
+---
+
+## 11. OpenClaw 网关服务
+
+OpenClawCM 通过 WebSocket 与 OpenClaw 实例通信，实现配置同步和远程控制。
+
+### 11.1 网关通信协议
+
+```python
+# services/openclaw_gateway.py
+async def _gateway_call(instance_url: str, token: str, method: str, params: dict) -> Any:
+    ws_url = _to_ws_url(instance_url)  # http:// → ws://
+    async with websockets.connect(ws_url, origin=origin) as ws:
+        # 1. 发送 connect 请求
+        connect_req = {
+            "type": "req", "id": uuid, "method": "connect",
+            "params": {
+                "minProtocol": 3, "maxProtocol": 3,
+                "client": {"id": "gateway-client", "version": "openclawcm"},
+                "role": "operator",
+                "scopes": ["operator.read", "operator.admin", "operator.approvals", "operator.pairing"],
+                "auth": {"token": token},
+            }
+        }
+        # 2. 等待 connect 响应
+        # 3. 发送业务请求（agents.list, config.get, skills.status 等）
+        # 4. 返回响应 payload
+```
+
+### 11.2 支持的网关 API
+
+| API 方法 | 功能 | 返回数据 |
+|---------|------|---------|
+| `agents.list` | 获取 Agent 列表 | `[{name, role, slug, version, permission}]` |
+| `config.get` | 获取完整配置 | `{models, plugins, gateway, ...}` |
+| `skills.status` | 获取技能状态 | `{skills: [{name, description, eligible, ...}]}` |
+| `sessions.list` | 获取会话列表 | `{sessions: [...]}` |
+
+### 11.3 实例配置同步
+
+`sync_instance_config()` 函数实现完整的实例同步：
+
+```python
+async def sync_instance_config(instance_url: str, token: str) -> Dict:
+    return {
+        "agents": _normalize_agents(await _gateway_call(..., "agents.list", {})),
+        "models": _normalize_models(config),      # 从 config.get 提取
+        "skills": _normalize_skills(await _gateway_call(..., "skills.status", {})),
+        "raw_config": actual_config,
+        "gateway_version": gw.get("version"),
+        "errors": [],  # 收集各 API 调用错误
+    }
+```
+
+**数据归一化**：不同版本的 OpenClaw 可能返回不同格式，`_normalize_*` 函数负责统一处理：
+- `_normalize_agents`: 处理 `agents` / `id` / `agentId` 等字段变体
+- `_normalize_models`: 解析 OpenClaw 的 `providers.{key}.models[]` 结构
+- `_normalize_skills`: 从 `skills.status` 提取技能详情
+
+### 11.4 协作流程执行
+
+协作流程支持远程执行控制：
+
+```python
+# POST /collaborations/{id}/execute
+{
+    "status": "running",      # pending → running → completed/failed
+    "started_at": "2025-03-05T10:00:00Z",
+    "current_node_id": 5,     # 当前执行节点
+    "execution_log": [...]    # 执行日志
+}
+```
+
+执行流程通过 `send_agent_message()` 向 Agent 发送消息：
+
+```python
+async def send_agent_message(instance_url: str, token: str,
+                             message: str, session_key: str = None) -> Dict:
+    params = {"message": message}
+    if session_key:
+        params["sessionKey"] = session_key
+    return await _gateway_call(instance_url, token, "agent", params)
+```
+
+---
+
+## 12. 记忆池多维度过滤
+
+记忆池支持按实例、Agent、协作流程、关键词进行过滤：
+
+### 12.1 后端 API
+
+```python
+@router.get("")
+async def list_memory_pools(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    status: Optional[str] = Query(default=None),
+    agent_id: Optional[int] = Query(default=None),      # 按 Agent 过滤
+    instance_id: Optional[int] = Query(default=None),   # 按实例过滤
+    collaboration_id: Optional[int] = Query(default=None),  # 按协作流程过滤
+    keyword: Optional[str] = Query(default=None),       # 关键词搜索
+    db: AsyncSession = Depends(get_db),
+):
+```
+
+### 12.2 关联查询
+
+```python
+# 通过 Agent 关联实现 instance_id 过滤
+if instance_id:
+    query = query.join(AgentMemoryPoolBinding).join(Agent).filter(
+        Agent.instance_id == instance_id
+    )
+
+# 通过 collaboration_id 直接过滤
+if collaboration_id:
+    query = query.filter(SharedMemoryPool.collaboration_id == collaboration_id)
+```
+
+### 12.3 前端联动过滤
+
+```javascript
+// 选择实例后，Agent 下拉框自动过滤
+const filteredAgents = computed(() => {
+    if (!searchForm.instance_id) return allAgents.value
+    return allAgents.value.filter(a => a.instance_id === searchForm.instance_id)
+})
+```
