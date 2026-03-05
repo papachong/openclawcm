@@ -82,6 +82,11 @@ export const collaborationApi = {
   // 流程控制
   start: (id) => request.post(`/collaborations/${id}/start`),
   stop: (id) => request.post(`/collaborations/${id}/stop`),
+  execute: (id, instanceId, message) => request.post(`/collaborations/${id}/execute?instance_id=${instanceId}&message=${encodeURIComponent(message)}`),
+  // 运行记录
+  listRuns: (id, params) => request.get(`/collaborations/${id}/runs`, { params }),
+  listActiveRuns: () => request.get('/collaborations/runs/active'),
+  cancelRun: (collabId, runId) => request.post(`/collaborations/${collabId}/runs/${runId}/cancel`),
   // 模板
   listTemplates: (params) => request.get('/collaborations/templates', { params }),
   saveAsTemplate: (id) => request.post(`/collaborations/${id}/save-template`),

@@ -183,12 +183,12 @@ function onSelectionChange() {}
 async function loadData() {
   loading.value = true
   try {
-    const params = {
-      page: pagination.page,
-      page_size: pagination.pageSize,
-      ...searchForm,
-      output_type: currentType.value === 'all' ? searchForm.output_type : currentType.value,
-    }
+    // Build params, filtering out empty strings to avoid 422 errors
+    const params = { page: pagination.page, page_size: pagination.pageSize }
+    if (searchForm.instance_id) params.instance_id = searchForm.instance_id
+    if (searchForm.agent_id) params.agent_id = searchForm.agent_id
+    if (searchForm.keyword) params.keyword = searchForm.keyword
+    params.output_type = currentType.value === 'all' ? (searchForm.output_type || undefined) : currentType.value
     const res = await outputApi.list(params)
     tableData.value = (res.data || []).map(i => ({ ...i, _selected: false }))
     pagination.total = res.total || 0

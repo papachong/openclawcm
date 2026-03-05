@@ -174,7 +174,7 @@ async def sync_config(instance_id: int, db: AsyncSession = Depends(get_db)):
         await db.flush()
         return error(f"网关同步失败: {str(e)}")
 
-    synced = {"agents": 0, "models": 0, "plugins": 0, "errors": sync_data.get("errors", [])}
+    synced = {"agents": 0, "models": 0, "skills": 0, "errors": sync_data.get("errors", [])}
 
     # ---- Sync Agents ----
     for remote_agent in sync_data.get("agents", []):
@@ -250,30 +250,44 @@ async def sync_config(instance_id: int, db: AsyncSession = Depends(get_db)):
             ))
         synced["models"] += 1
 
-    # ---- Sync Plugins -> Skills ----
-    for remote_plugin in sync_data.get("plugins", []):
-        pname = remote_plugin.get("name")
-        if not pname:
+    # ---- Sync Skills (from skills.status API) ----
+    for remote_skill in sync_data.get("skills", []):
+        sname = remote_skill.get("name")
+        if not sname:
             continue
+        skill_key = remote_skill.get("skill_key") or sname
         existing_res = await db.execute(
-            select(Skill).where(Skill.name == pname)
+            select(Skill).where(Skill.instance_id == instance_id, Skill.name == sname)
         )
         existing = existing_res.scalar_one_or_none()
         if existing:
-            if remote_plugin.get("version"):
-                existing.version = remote_plugin["version"]
-            if remote_plugin.get("description"):
-                existing.description = remote_plugin["description"]
-            if remote_plugin.get("status"):
-                existing.status = remote_plugin["status"]
+            existing.description = remote_skill.get("description")
+            existing.source = remote_skill.get("source")
+            existing.bundled = remote_skill.get("bundled", False)
+            existing.file_path = remote_skill.get("file_path")
+            existing.base_dir = remote_skill.get("base_dir")
+            existing.skill_key = skill_key
+            existing.primary_env = remote_skill.get("primary_env")
+            existing.emoji = remote_skill.get("emoji")
+            existing.homepage = remote_skill.get("homepage")
+            existing.status = remote_skill.get("status", "installed")
         else:
             db.add(Skill(
-                name=pname,
-                version=remote_plugin.get("version", "1.0.0"),
-                description=remote_plugin.get("description"),
-                status=remote_plugin.get("status", "available"),
+                name=sname,
+                instance_id=instance_id,
+                description=remote_skill.get("description"),
+                version=remote_skill.get("version", "1.0.0"),
+                source=remote_skill.get("source"),
+                bundled=remote_skill.get("bundled", False),
+                file_path=remote_skill.get("file_path"),
+                base_dir=remote_skill.get("base_dir"),
+                skill_key=skill_key,
+                primary_env=remote_skill.get("primary_env"),
+                emoji=remote_skill.get("emoji"),
+                homepage=remote_skill.get("homepage"),
+                status=remote_skill.get("status", "installed"),
             ))
-        synced["plugins"] += 1
+        synced["skills"] += 1
 
     # Recalculate agent count after inserts
     await db.flush()
@@ -287,7 +301,7 @@ async def sync_config(instance_id: int, db: AsyncSession = Depends(get_db)):
         "instance_id": instance_id,
         "synced_agents": synced["agents"],
         "synced_models": synced["models"],
-        "synced_plugins": synced["plugins"],
+        "synced_skills": synced["skills"],
         "errors": synced["errors"],
         "gateway_version": sync_data.get("gateway_version"),
     }, "同步完成")
@@ -334,6 +348,10 @@ async def sync_all_instances(db: AsyncSession = Depends(get_db)):
         try:
             sync_data = await sync_instance_config(inst.url, inst.api_key)
             synced_agents = 0
+            synced_models = 0
+            synced_skills = 0
+
+            # ---- Sync Agents ----
             for remote_agent in sync_data.get("agents", []):
                 rname = remote_agent.get("name")
                 if not rname:
@@ -357,6 +375,92 @@ async def sync_all_instances(db: AsyncSession = Depends(get_db)):
                     ))
                 synced_agents += 1
 
+            # ---- Sync Models ----
+            for remote_model in sync_data.get("models", []):
+                mname = remote_model.get("name")
+                model_name = remote_model.get("model_name", "unknown")
+                if not mname:
+                    continue
+                # Find or create provider
+                provider_name = remote_model.get("provider", "unknown")
+                provider_res = await db.execute(
+                    select(ModelProvider).where(ModelProvider.name == provider_name)
+                )
+                provider = provider_res.scalar_one_or_none()
+                if not provider:
+                    provider = ModelProvider(
+                        name=provider_name,
+                        api_type="openai",
+                        base_url=remote_model.get("base_url"),
+                        status="active",
+                        description=f"从实例 {inst.name} 同步",
+                    )
+                    db.add(provider)
+                    await db.flush()
+
+                # Find or create model config
+                existing_res = await db.execute(
+                    select(ModelConfig).where(
+                        ModelConfig.instance_id == inst.id,
+                        ModelConfig.name == mname,
+                    )
+                )
+                existing = existing_res.scalar_one_or_none()
+                if existing:
+                    existing.model_name = model_name
+                    existing.provider_id = provider.id
+                    if remote_model.get("description"):
+                        existing.description = remote_model["description"]
+                else:
+                    db.add(ModelConfig(
+                        name=mname,
+                        model_name=model_name,
+                        provider_id=provider.id,
+                        scope="instance",
+                        instance_id=inst.id,
+                        description=remote_model.get("description") or f"从实例 {inst.name} 同步",
+                    ))
+                synced_models += 1
+
+            # ---- Sync Skills (from skills.status API) ----
+            for remote_skill in sync_data.get("skills", []):
+                sname = remote_skill.get("name")
+                if not sname:
+                    continue
+                skill_key = remote_skill.get("skill_key") or sname
+                existing_res = await db.execute(
+                    select(Skill).where(Skill.instance_id == inst.id, Skill.name == sname)
+                )
+                existing = existing_res.scalar_one_or_none()
+                if existing:
+                    existing.description = remote_skill.get("description")
+                    existing.source = remote_skill.get("source")
+                    existing.bundled = remote_skill.get("bundled", False)
+                    existing.file_path = remote_skill.get("file_path")
+                    existing.base_dir = remote_skill.get("base_dir")
+                    existing.skill_key = skill_key
+                    existing.primary_env = remote_skill.get("primary_env")
+                    existing.emoji = remote_skill.get("emoji")
+                    existing.homepage = remote_skill.get("homepage")
+                    existing.status = remote_skill.get("status", "installed")
+                else:
+                    db.add(Skill(
+                        name=sname,
+                        instance_id=inst.id,
+                        description=remote_skill.get("description"),
+                        version=remote_skill.get("version", "1.0.0"),
+                        source=remote_skill.get("source"),
+                        bundled=remote_skill.get("bundled", False),
+                        file_path=remote_skill.get("file_path"),
+                        base_dir=remote_skill.get("base_dir"),
+                        skill_key=skill_key,
+                        primary_env=remote_skill.get("primary_env"),
+                        emoji=remote_skill.get("emoji"),
+                        homepage=remote_skill.get("homepage"),
+                        status=remote_skill.get("status", "installed"),
+                    ))
+                synced_skills += 1
+
             await db.flush()
             cnt_res = await db.execute(
                 select(func.count(Agent.id)).where(Agent.instance_id == inst.id)
@@ -365,8 +469,8 @@ async def sync_all_instances(db: AsyncSession = Depends(get_db)):
 
             entry["status"] = "synced"
             entry["agents"] = synced_agents
-            entry["models"] = len(sync_data.get("models", []))
-            entry["plugins"] = len(sync_data.get("plugins", []))
+            entry["models"] = synced_models
+            entry["skills"] = synced_skills
             entry["errors"] = sync_data.get("errors", [])
         except Exception as e:
             entry["status"] = f"同步失败: {str(e)}"

@@ -191,7 +191,7 @@ function goBack() { router.push('/collaborations') }
 async function loadFlow() {
   try {
     const res = await collaborationApi.getFlow(collabId.value)
-    const flow = res
+    const flow = res.data || res
     flowData.value = flow
 
     nodes.value = (flow.nodes || []).map(n => ({
@@ -219,7 +219,7 @@ async function loadFlow() {
 async function loadAgents() {
   try {
     const res = await agentApi.list()
-    allAgents.value = res.data || []
+    allAgents.value = (res.data || res || []).filter(Boolean)
   } catch (e) { console.error(e) }
 }
 

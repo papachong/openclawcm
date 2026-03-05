@@ -27,6 +27,7 @@ class Collaboration(Base, TimestampMixin):
     # Relationships
     nodes = relationship("CollaborationNode", back_populates="collaboration", cascade="all, delete-orphan")
     edges = relationship("CollaborationEdge", back_populates="collaboration", cascade="all, delete-orphan")
+    runs = relationship("CollaborationRun", back_populates="collaboration", cascade="all, delete-orphan")
 
 
 class CollaborationNode(Base, TimestampMixin):
@@ -65,3 +66,24 @@ class CollaborationEdge(Base, TimestampMixin):
     collaboration = relationship("Collaboration", back_populates="edges")
     source_node = relationship("CollaborationNode", foreign_keys=[source_node_id])
     target_node = relationship("CollaborationNode", foreign_keys=[target_node_id])
+
+
+class CollaborationRun(Base, TimestampMixin):
+    """Tracks execution runs of a collaboration workflow."""
+    __tablename__ = "collaboration_runs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    collaboration_id = Column(Integer, ForeignKey("collaborations.id", ondelete="CASCADE"), nullable=False)
+    instance_id = Column(Integer, ForeignKey("instances.id", ondelete="SET NULL"), nullable=True, comment="执行的实例ID")
+    status = Column(String(20), default="pending", comment="状态: pending/running/completed/failed/cancelled")
+    current_node_id = Column(Integer, ForeignKey("collaboration_nodes.id", ondelete="SET NULL"), nullable=True, comment="当前执行节点")
+    input_message = Column(Text, nullable=True, comment="输入消息")
+    output_summary = Column(Text, nullable=True, comment="输出摘要")
+    error_message = Column(Text, nullable=True, comment="错误信息")
+    started_at = Column(String(30), nullable=True, comment="开始时间")
+    completed_at = Column(String(30), nullable=True, comment="完成时间")
+    session_keys_json = Column(Text, nullable=True, comment="会话键列表(JSON)")
+    token_usage_json = Column(Text, nullable=True, comment="Token使用统计(JSON)")
+
+    # Relationships
+    collaboration = relationship("Collaboration", back_populates="runs")

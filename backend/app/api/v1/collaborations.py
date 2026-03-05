@@ -2,20 +2,24 @@
 Multi-agent collaboration API endpoints - CRUD + flow editor + control.
 """
 import json
+from datetime import datetime
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
-from typing import Optional
+from typing import Optional, List
 
 from app.database import get_db
-from app.models.collaboration import Collaboration, CollaborationNode, CollaborationEdge
+from app.models.collaboration import Collaboration, CollaborationNode, CollaborationEdge, CollaborationRun
+from app.models.instance import Instance
+from app.models.agent import Agent
 from app.schemas.collaboration import (
     CollaborationCreate, CollaborationUpdate, CollaborationOut,
     NodeCreate, NodeUpdate, NodeOut,
     EdgeCreate, EdgeUpdate, EdgeOut,
     LayoutSave, FlowDetailOut,
 )
+from app.services.openclaw_gateway import send_agent_message, get_remote_sessions
 from app.utils.response import success, error, page_response
 
 router = APIRouter()
@@ -493,3 +497,203 @@ async def save_layout(collab_id: int, data: LayoutSave, db: AsyncSession = Depen
 
     await db.flush()
     return success(None, "布局保存成功")
+
+
+# ==================== Execution & Monitoring ====================
+
+@router.post("/{collab_id}/execute")
+async def execute_collaboration(
+    collab_id: int,
+    instance_id: int = Query(..., description="Target instance ID"),
+    message: str = Query(..., description="Initial message to start workflow"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Execute a collaboration workflow on a remote OpenClaw instance.
+
+    Converts the DAG to agent prompts and sends to the remote instance.
+    """
+    # Load collaboration with nodes and edges
+    result = await db.execute(
+        select(Collaboration).options(
+            selectinload(Collaboration.nodes).selectinload(CollaborationNode.agent),
+            selectinload(Collaboration.edges),
+        ).where(Collaboration.id == collab_id)
+    )
+    collab = result.scalar_one_or_none()
+    if not collab:
+        return error("协作配置不存在", 404)
+
+    # Get instance
+    inst_result = await db.execute(select(Instance).where(Instance.id == instance_id))
+    instance = inst_result.scalar_one_or_none()
+    if not instance:
+        return error("实例不存在", 404)
+    if not instance.api_key:
+        return error("实例未配置 API Key", 400)
+
+    # Build execution plan from DAG
+    nodes = collab.nodes or []
+    edges = collab.edges or []
+
+    # Find start node
+    start_node = next((n for n in nodes if n.node_type == "start"), None)
+    if not start_node:
+        return error("协作流程缺少开始节点", 400)
+
+    # Find agent nodes in order (simple topological sort)
+    agent_nodes = [n for n in nodes if n.node_type == "agent"]
+    if not agent_nodes:
+        return error("协作流程中没有Agent节点", 400)
+
+    # Create run record
+    run = CollaborationRun(
+        collaboration_id=collab_id,
+        instance_id=instance_id,
+        status="running",
+        input_message=message,
+        started_at=datetime.now().isoformat(),
+    )
+    db.add(run)
+    await db.flush()
+
+    # Build prompt based on workflow type
+    if collab.type == "chain":
+        # Chain: Execute agents sequentially
+        prompt_parts = [f"协作任务: {collab.name}"]
+        if collab.description:
+            prompt_parts.append(f"描述: {collab.description}")
+        prompt_parts.append(f"\n用户输入: {message}")
+        prompt_parts.append("\n请按以下流程执行:")
+
+        for i, node in enumerate(agent_nodes):
+            agent_name = node.agent.name if node.agent else node.label
+            prompt_parts.append(f"{i+1}. {agent_name}: {node.label or '处理任务'}")
+
+        prompt = "\n".join(prompt_parts)
+
+    elif collab.type == "parallel":
+        # Parallel: Execute agents in parallel
+        prompt_parts = [f"并行协作任务: {collab.name}"]
+        prompt_parts.append(f"用户输入: {message}")
+        prompt_parts.append("\n以下Agent将并行处理此任务:")
+        for node in agent_nodes:
+            agent_name = node.agent.name if node.agent else node.label
+            prompt_parts.append(f"- {agent_name}")
+        prompt = "\n".join(prompt_parts)
+
+    else:
+        # Custom/Conditional
+        prompt = f"协作任务: {collab.name}\n用户输入: {message}"
+
+    # Send to remote instance
+    try:
+        resp = await send_agent_message(instance.url, instance.api_key, prompt)
+        run.session_keys_json = json.dumps([resp.get("runId")] if resp.get("runId") else [])
+
+        # Update collaboration status
+        collab.status = "running"
+        await db.flush()
+
+        return success({
+            "run_id": run.id,
+            "status": "running",
+            "gateway_response": resp,
+        }, "协作流程已启动")
+
+    except Exception as e:
+        run.status = "failed"
+        run.error_message = str(e)
+        run.completed_at = datetime.now().isoformat()
+        await db.flush()
+        return error(f"执行失败: {str(e)}", 500)
+
+
+@router.get("/{collab_id}/runs")
+async def list_collaboration_runs(
+    collab_id: int,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """List execution runs for a collaboration."""
+    count_result = await db.execute(
+        select(func.count(CollaborationRun.id)).where(CollaborationRun.collaboration_id == collab_id)
+    )
+    total = count_result.scalar() or 0
+
+    result = await db.execute(
+        select(CollaborationRun)
+        .where(CollaborationRun.collaboration_id == collab_id)
+        .order_by(CollaborationRun.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    runs = result.scalars().all()
+
+    data = [{
+        "id": r.id,
+        "collaboration_id": r.collaboration_id,
+        "instance_id": r.instance_id,
+        "status": r.status,
+        "current_node_id": r.current_node_id,
+        "input_message": r.input_message,
+        "output_summary": r.output_summary,
+        "error_message": r.error_message,
+        "started_at": r.started_at,
+        "completed_at": r.completed_at,
+        "created_at": r.created_at.isoformat() if r.created_at else None,
+    } for r in runs]
+
+    return page_response(data, total, page, page_size)
+
+
+@router.get("/runs/active")
+async def list_active_runs(db: AsyncSession = Depends(get_db)):
+    """List all active collaboration runs across all workflows."""
+    result = await db.execute(
+        select(CollaborationRun)
+        .options(selectinload(CollaborationRun.collaboration))
+        .where(CollaborationRun.status == "running")
+        .order_by(CollaborationRun.id.desc())
+    )
+    runs = result.scalars().all()
+
+    data = [{
+        "id": r.id,
+        "collaboration_id": r.collaboration_id,
+        "collaboration_name": r.collaboration.name if r.collaboration else None,
+        "instance_id": r.instance_id,
+        "status": r.status,
+        "input_message": r.input_message,
+        "started_at": r.started_at,
+        "created_at": r.created_at.isoformat() if r.created_at else None,
+    } for r in runs]
+
+    return success(data)
+
+
+@router.post("/{collab_id}/runs/{run_id}/cancel")
+async def cancel_run(
+    collab_id: int,
+    run_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Cancel a running collaboration execution."""
+    result = await db.execute(
+        select(CollaborationRun).where(
+            CollaborationRun.id == run_id,
+            CollaborationRun.collaboration_id == collab_id,
+        )
+    )
+    run = result.scalar_one_or_none()
+    if not run:
+        return error("运行记录不存在", 404)
+
+    if run.status != "running":
+        return error("该运行已结束", 400)
+
+    run.status = "cancelled"
+    run.completed_at = datetime.now().isoformat()
+    await db.flush()
+
+    return success({"id": run.id, "status": "cancelled"}, "已取消")

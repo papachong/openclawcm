@@ -363,7 +363,7 @@ async function loadAgentSkills() {
   skillsLoading.value = true
   try {
     const res = await agentApi.listSkills(currentAgentId.value)
-    agentSkills.value = res || []
+    agentSkills.value = res.data || []
   } catch (e) { console.error(e) }
   finally { skillsLoading.value = false }
 }
