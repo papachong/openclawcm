@@ -28,3 +28,5 @@ data/
 .env
 .env.local
 .run/*.log
+.claude/
+.claude/
