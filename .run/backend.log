@@ -1,9 +1,0 @@
-INFO:     Started server process [63211]
-INFO:     Waiting for application startup.
-2026-03-01 19:57:29.255 | INFO     | app.main:lifespan:40 - Starting OpenClawCM v0.1.0
-2026-03-01 19:57:29.268 | INFO     | app.main:lifespan:45 - Database initialized
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-INFO:     127.0.0.1:55951 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56013 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56126 - "GET /api/v1/instances?page=1&page_size=20&name=&status= HTTP/1.1" 200 OK
