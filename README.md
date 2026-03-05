@@ -131,6 +131,9 @@ openclawcm/
 ### 📊 Dashboard
 
 Real-time monitoring with ECharts visualizations:
+
+![Dashboard](example/dashboard.png)
+
 - 6 statistics cards (instances / agents / active agents / outputs / collaborations / skills)
 - Output trends line chart (last 7 days)
 - Agent status distribution pie chart
