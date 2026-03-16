@@ -231,4 +231,4 @@ Current test suite covers **85 test cases** across all API endpoints including p
 
 ## License
 
-[Apache License 2.0](LICENSE)
+[MIT License](LICENSE)
